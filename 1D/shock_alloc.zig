@@ -110,7 +110,8 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: [*]Real_t,
 //************************************************************************/
 
 fn ComputeFaceInfo(numFace: Index_t,
-                   mass: [*]Real_t, momentum: [*]Real_t, energy: [*]Real_t, 
+                   mass: [*]const Real_t, momentum: [*]const Real_t,
+                   energy: [*]const Real_t,
                    f0: [*]Real_t, f1: [*]Real_t, f2: [*]Real_t) void
 {
    var idx: Index_t = 0;
@@ -183,8 +184,8 @@ fn ComputeFaceInfo(numFace: Index_t,
 
 fn UpdateElemInfo(numElem: Index_t,
                   mass: [*]Real_t, momentum: [*]Real_t, energy: [*]Real_t,
-                  pressure: [*]Real_t, f0: [*]Real_t, f1: [*]Real_t,
-                  f2: [*]Real_t, dtdx: Real_t) void
+                  pressure: [*]Real_t, f0: [*]const Real_t,
+                  f1: [*]const Real_t, f2: [*]const Real_t, dtdx: Real_t) void
 {
    var idx: Index_t = 1;
    while ( idx < numElem ) : ( idx += 1 ) {
@@ -207,7 +208,7 @@ fn UpdateElemInfo(numElem: Index_t,
 // Purpose   :  Create a plot for a single field
 //************************************************************************/
 
-fn DumpField(tag: []const u8, numElem: Index_t, field: [*]Real_t) !void
+fn DumpField(tag: []const u8, numElem: Index_t, field: [*]const Real_t) !void
 {
    try stdout.print("{s}\n", .{ tag });
    var idx: Index_t = 0;
@@ -223,8 +224,9 @@ fn DumpField(tag: []const u8, numElem: Index_t, field: [*]Real_t) !void
 // Purpose   :  create output that can be viewed with gnuplot: plot "file"
 //************************************************************************/
 
-fn DumpPlot(numElem: Index_t, mass: [*]Real_t, momentum: [*]Real_t,
-                              energy: [*]Real_t, pressure: [*]Real_t) !void
+fn DumpPlot(numElem: Index_t, mass: [*]const Real_t, momentum: [*]const Real_t,
+                              energy: [*]const Real_t,
+                              pressure: [*]const Real_t) !void
 {
    const m = "# mass";
    try DumpField(m, numElem, mass);

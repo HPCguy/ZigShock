@@ -1135,23 +1135,17 @@ fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
                         dt: Real_t, u_cut: Real_t, numNode: Index_t)
                         void
 {
-  var k: Index_t = 0;
-  while ( k < numNode ) : ( k += 1 ) {
+  var idx: Index_t = 0;
+  while ( idx < numNode ) : ( idx += 1 ) {
 
-     const xt = xd[k] + xdd[k] * dt;
-     var xdtmp = xt;
-     if ( @abs(xt) < u_cut ) xdtmp = ZERO;
-     xd[k] = xdtmp;
+     const xt = xd[idx] + xdd[idx] * dt;
+     xd[idx] = if ( @abs(xt) < u_cut ) ZERO else xt;
 
-     const yt = yd[k] + ydd[k] * dt;
-     var ydtmp =yt;
-     if( @abs(yt) < u_cut ) ydtmp = ZERO;
-     yd[k] = ydtmp;
+     const yt = yd[idx] + ydd[idx] * dt;
+     yd[idx] = if( @abs(yt) < u_cut ) ZERO else yt;
 
-     const zt = zd[k] + zdd[k] * dt;
-     var zdtmp = zt;
-     if( @abs(zt) < u_cut ) zdtmp = ZERO;
-     zd[k] = zdtmp;
+     const zt = zd[idx] + zdd[idx] * dt;
+     zd[idx] = if( @abs(zt) < u_cut ) ZERO else zt;
    }
 }
 
