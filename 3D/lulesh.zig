@@ -93,20 +93,19 @@ fn IndexToReal(idx: Index_t) Real_t
 // The following constants help centralize that change.
 // A block of scalar initializations are also found in main(),
 // where suffix changes could also need to be made.
-const ZERO      : Real_t = 0.0;
-const SIXTEENTH : Real_t = 0.0625;
-const EIGHTH    : Real_t = 0.125;
-const QUARTER   : Real_t = 0.25;
-const HALF      : Real_t = 0.5;
-const ONE       : Real_t = 1.0;
-const TWO       : Real_t = 2.0;
-const THREE     : Real_t = 3.0;
-const FOUR      : Real_t = 4.0;
-const SIX       : Real_t = 6.0;
-const SEVEN     : Real_t = 7.0;
-const EIGHT     : Real_t = 8.0;
-const TWELVE    : Real_t = 8.0;
-
+const ZERO      : Real_t =  0.0;
+const SIXTEENTH : Real_t =  0.0625;
+const EIGHTH    : Real_t =  0.125;
+const QUARTER   : Real_t =  0.25;
+const HALF      : Real_t =  0.5;
+const ONE       : Real_t =  1.0;
+const TWO       : Real_t =  2.0;
+const THREE     : Real_t =  3.0;
+const FOUR      : Real_t =  4.0;
+const SIX       : Real_t =  6.0;
+const SEVEN     : Real_t =  7.0;
+const EIGHT     : Real_t =  8.0;
+const TWELVE    : Real_t = 12.0;
 const SIXTYFOUR : Real_t = 64.0;
 
 const Err = enum(u8) { VolumeError = 1, QStopError = 2 } ;
@@ -642,6 +641,7 @@ fn VoluDer(x0: Real_t, x1: Real_t, x2: Real_t,
      ((y1 + y2) * (z0 + z1) - (y0 + y1) * (z1 + z2) +
       (y0 + y4) * (z3 + z4) - (y3 + y4) * (z0 + z4) -
       (y2 + y5) * (z3 + z5) + (y3 + y5) * (z2 + z5)) * twelfth;
+
    dvdy.* =
      (- (x1 + x2) * (z0 + z1) + (x0 + x1) * (z1 + z2) -
       (x0 + x4) * (z3 + z4) + (x3 + x4) * (z0 + z4) +
@@ -884,7 +884,7 @@ fn FBKernel(x8ni: [8]Real_t, y8ni: [8]Real_t, z8ni: [8]Real_t,
    var k1: Index_t = 0;
    while( k1 < 4 ) : ( k1 += 1) {
       const gami = gammaa[k1];
-      var hg = hourgam[k1];
+      var hg = &hourgam[k1];
 
       const hourmodx =
          x8ni[0] * gami[0] + x8ni[1] * gami[1] +
@@ -998,7 +998,7 @@ fn CopyBlock(dst1: []Real_t, dst2: []Real_t, dst3: []Real_t,
 }
 
 fn CalcHourglassControlForElems(domain: *Domain,
-                                  determ: [*]Real_t, hgcoef: Real_t) void
+                                determ: [*]Real_t, hgcoef: Real_t) void
 {
    const numElem = domain.numElem;
 
@@ -2561,10 +2561,11 @@ pub fn main() !void
 
    var k: Index_t = 0;
    while ( k < domElems ) : ( k += 1 ) {
-      domain.e[k] = ZERO;
-      domain.p[k] = ZERO;
-      domain.q[k] = ZERO;
-      domain.v[k] = ONE;
+      domain.e[k]  = ZERO;
+      domain.p[k]  = ZERO;
+      domain.q[k]  = ZERO;
+      domain.ss[k] = ZERO;
+      domain.v[k]  = ONE;
    }
 
    k = 0;
@@ -2758,9 +2759,13 @@ pub fn main() !void
    while(domain.time < domain.stoptime) {
       TimeIncrement(&domain);
       LagrangeLeapFrog(&domain);
-      try stdout.print("{e:9.7} {e:9.7}\n",
-                        .{ domain.time, domain.deltatime });
+      if (LULESH_SHOW_PROGRESS)
+         try stdout.print("time = {e:9.6}, dt={e:9.6}\n",
+                           .{ domain.time, domain.deltatime });
    }
+   if (!LULESH_SHOW_PROGRESS)
+      try stdout.print("time = {e:9.6}, dt={e:9.6}\n",
+                        .{ domain.time, domain.deltatime });
 
    return;
 }
