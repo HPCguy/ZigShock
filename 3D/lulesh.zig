@@ -95,6 +95,7 @@ fn IndexToReal(idx: Index_t) Real_t
 // where suffix changes could also need to be made.
 const ZERO      : Real_t =  0.0;
 const SIXTEENTH : Real_t =  0.0625;
+const HUNDREDTH : Real_t =  0.01;
 const EIGHTH    : Real_t =  0.125;
 const QUARTER   : Real_t =  0.25;
 const HALF      : Real_t =  0.5;
@@ -323,7 +324,7 @@ fn TimeIncrement(domain: *Domain) void
    domain.cycle += 1;
 }
 
-fn InitStressTermsForElems(p: [*]Real_t, q: [*]Real_t,
+fn InitStressTermsForElems(p: [*]const Real_t, q: [*]const Real_t,
                            sigxx: [*]Real_t, sigyy: [*]Real_t,
                            sigzz: [*]Real_t, numElem: Index_t) void
 {
@@ -336,9 +337,10 @@ fn InitStressTermsForElems(p: [*]Real_t, q: [*]Real_t,
    }
 }
 
-fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
+fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8] Real_t,
                                     B: [][8]Real_t) Real_t
 {
+   @setFloatMode(.optimized);
    const x0 = x[0];    const x1 = x[1];
    const x2 = x[2];    const x3 = x[3];
    const x4 = x[4];    const x5 = x[5];
@@ -408,7 +410,7 @@ fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
    B[2][3] =   -  cjzxi  +  cjzet  -  cjzze;  B[2][5] = -B[2][3];
 
    // calculate jacobian determinant (volume)
-   return 8.0 * ( fjxet * cjxet + fjyet * cjyet + fjzet * cjzet);
+   return EIGHT * ( fjxet * cjxet + fjyet * cjyet + fjzet * cjzet);
 }
 
 fn SumElemFaceNormal(normalX0: *Real_t, normalY0: *Real_t, normalZ0: *Real_t,
@@ -420,6 +422,7 @@ fn SumElemFaceNormal(normalX0: *Real_t, normalY0: *Real_t, normalZ0: *Real_t,
                      x2: Real_t, y2: Real_t, z2: Real_t,
                      x3: Real_t, y3: Real_t, z3: Real_t) void
 {
+   @setFloatMode(.optimized);
    const bisectX0 = x3 + x2 - x1 - x0;
    const bisectY0 = y3 + y2 - y1 - y0;
    const bisectZ0 = z3 + z2 - z1 - z0;
@@ -507,6 +510,7 @@ fn SumElemStressesToNodeForces(B: [3][8]Real_t, stress_xx: Real_t,
                                fx: []Real_t, fy: []Real_t, fz: []Real_t)
                                void
 {
+  @setFloatMode(.optimized);
   // fx.data = - ( stress_xx * B[0].data );
   // fy.data = - ( stress_yy * B[1].data );
   // fz.data = - ( stress_zz * B[2].data );
@@ -518,7 +522,8 @@ fn SumElemStressesToNodeForces(B: [3][8]Real_t, stress_xx: Real_t,
   }
 }
 
-fn GatherNodes(elemNodes: [8]Index_t, x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
+fn GatherNodes(elemNodes: [8]Index_t,
+               x: [*]const Real_t, y: [*]const Real_t, z: [*]const Real_t,
                x_local: []Real_t, y_local: []Real_t, z_local: []Real_t) void
 {
   var lnode: Index_t = 0;
@@ -533,6 +538,7 @@ fn GatherNodes(elemNodes: [8]Index_t, x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
 fn SumForce(elemNodes: [8]Index_t, fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
             fx_local: [8]Real_t, fy_local: [8]Real_t, fz_local: [8]Real_t) void
 {
+  @setFloatMode(.optimized);
   var lnode: Index_t = 0;
   while ( lnode < 8 ) : ( lnode += 1 ) {
     const gnode = elemNodes[lnode];
@@ -543,9 +549,10 @@ fn SumForce(elemNodes: [8]Index_t, fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
 }
 
 fn IntegrateStressForElems(nodelist: [*][8]Index_t,
-                           x: [*]Real_t,  y: [*]Real_t, z: [*]Real_t,
+                           x: [*]const Real_t,  y: [*]const Real_t,
+                           z: [*]const Real_t, sigxx: [*]const Real_t,
+                           sigyy: [*]const Real_t, sigzz: [*]const Real_t,
                            fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
-                           sigxx: [*]Real_t, sigyy: [*]Real_t, sigzz: [*]Real_t,
                            determ: [*]Real_t, numElem: Index_t) void
 {
   // loop over all elements
@@ -585,9 +592,10 @@ fn IntegrateStressForElems(nodelist: [*][8]Index_t,
   }
 }
 
-fn CollectDomainNodesToElemNodes(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                                   elemToNode: [8]Index_t, elemX: []Real_t,
-                                   elemY: []Real_t, elemZ: []Real_t) void
+fn CollectDomainNodesToElemNodes(elemToNode: [8]Index_t, elemX: []Real_t,
+                                 elemY: []Real_t, elemZ: []Real_t,
+                                 x: [*]const Real_t, y: [*]const Real_t,
+                                 z: [*]const Real_t) void
 {
    const nd0i = elemToNode[0];
    const nd1i = elemToNode[1];
@@ -635,6 +643,7 @@ fn VoluDer(x0: Real_t, x1: Real_t, x2: Real_t,
              z3: Real_t, z4: Real_t, z5: Real_t,
              dvdx: *Real_t, dvdy: *Real_t, dvdz: *Real_t) void
 {
+   @setFloatMode(.optimized);
    const twelfth = ONE / TWELVE;
 
    dvdx.* =
@@ -691,10 +700,11 @@ fn CalcElemVolumeDerivative(dvdx: []Real_t, dvdy: []Real_t, dvdz: []Real_t,
 }
 
 fn CalcElemFBHourglassForce(xd: [8]Real_t, yd: [8]Real_t, zd: [8]Real_t,
-                            hourgam: [][8]Real_t, coefficient: Real_t,
+                            hourgam: [4][8]Real_t, coefficient: Real_t,
                             hgfx: []Real_t, hgfy: []Real_t, hgfz: []Real_t)
                             void
 {
+   @setFloatMode(.optimized);
    const k00 = 0;
    const k01 = 1;
    const k02 = 2;
@@ -881,6 +891,7 @@ fn FBKernel(x8ni: [8]Real_t, y8ni: [8]Real_t, z8ni: [8]Real_t,
               dvdxi: [8]Real_t, dvdyi: [8]Real_t, dvdzi: [8]Real_t,
               hourgam: [][8]Real_t, volinv: Real_t) void
 {
+   @setFloatMode(.optimized);
    var k1: Index_t = 0;
    while( k1 < 4 ) : ( k1 += 1) {
       const gami = gammaa[k1];
@@ -975,11 +986,11 @@ fn CalcFBHourglassForceForElems(nodelist: [*][8]Index_t,
       var hgfy: [8]Real_t = undefined;
       var hgfz: [8]Real_t = undefined;
 
-      const coefficient = - hourg * 0.01 * ss1 * mass1 / volume13;
+      const coefficient = - hourg * HUNDREDTH * ss1 * mass1 / volume13;
 
       GatherNodes(elemToNode, xd, yd, zd, &xd1, &yd1, &zd1);
 
-      CalcElemFBHourglassForce(xd1, yd1, zd1, &hourgam,
+      CalcElemFBHourglassForce(xd1, yd1, zd1, hourgam,
                                coefficient, &hgfx, &hgfy, &hgfz);
 
       SumForce(elemToNode, fx, fy, fz, hgfx, hgfy, hgfz);
@@ -1019,8 +1030,8 @@ fn CalcHourglassControlForElems(domain: *Domain,
       var pfz: [8]Real_t = undefined;
 
       const elemToNode = domain.nodelist[idx];
-      CollectDomainNodesToElemNodes(domain.x, domain.y, domain.z,
-                                    elemToNode, &x1, &y1, &z1);
+      CollectDomainNodesToElemNodes(elemToNode, &x1, &y1, &z1,
+                                    domain.x, domain.y, domain.z);
 
       CalcElemVolumeDerivative(&pfx, &pfy, &pfz, x1, y1, z1);
 
@@ -1048,7 +1059,7 @@ fn CalcHourglassControlForElems(domain: *Domain,
    return ;
 }
 
-fn VolErr1(determ: [*]Real_t, numElem: Index_t) bool
+fn VolErr1(determ: [*]const Real_t, numElem: Index_t) bool
 {
   var k: Index_t = 0;
   while (k < numElem) : ( k += 1 ) {
@@ -1075,8 +1086,9 @@ fn CalcVolumeForceForElems(domain: *Domain) void
       // material stresses.
       IntegrateStressForElems( domain.nodelist,
                                domain.x, domain.y, domain.z,
+                               sigxx, sigyy, sigzz,
                                domain.fx, domain.fy, domain.fz,
-                               sigxx, sigyy, sigzz, determ, numElem);
+                               determ, numElem);
 
       // check for negative element volume
       if (VolErr1(determ, numElem))
@@ -1135,6 +1147,7 @@ fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
                         dt: Real_t, u_cut: Real_t, numNode: Index_t)
                         void
 {
+  @setFloatMode(.optimized);
   var idx: Index_t = 0;
   while ( idx < numNode ) : ( idx += 1 ) {
 
@@ -1153,6 +1166,7 @@ fn CalcPositionForNodes(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
                         xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
                         dt: Real_t, numNode: Index_t) void
 {
+   @setFloatMode(.optimized);
    var k: Index_t = 0;
    while ( k < numNode ) : ( k += 1 ) {
      x[k] += xd[k] * dt;
@@ -1200,6 +1214,7 @@ fn TRIPLE_PRODUCT(x1_: Real_t, y1_: Real_t, z1_: Real_t,
                   x2_: Real_t, y2_: Real_t, z2_: Real_t,
                   x3_: Real_t, y3_: Real_t, z3_: Real_t) Real_t
 {
+   @setFloatMode(.optimized);
    return  (x1_*(y2_*z3_ - z2_*y3_) +
             x2_*(z1_*y3_ - y1_*z3_) +
             x3_*(y1_*z2_ - z1_*y2_));
@@ -1213,6 +1228,7 @@ fn CalcElemVolume2(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
                    z0: Real_t, z1: Real_t, z2: Real_t, z3: Real_t,
                    z4: Real_t, z5: Real_t, z6: Real_t, z7: Real_t) Real_t
 {
+  @setFloatMode(.optimized);
   var fv: Real_t = ZERO;
   {
      const dx31 = x3 - x1;
@@ -1305,6 +1321,7 @@ fn AreaFace(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
             y0: Real_t, y1: Real_t, y2: Real_t, y3: Real_t,
             z0: Real_t, z1: Real_t, z2: Real_t, z3: Real_t) Real_t
 {
+   @setFloatMode(.optimized);
    const dx1 = (x2 - x0);
    const dx2 = (x3 - x1);
    const dy1 = (y2 - y0);
@@ -1358,7 +1375,7 @@ fn CalcElemCharacteristicLength(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
                 z[3],z[0],z[4],z[7]);
    if (a > charLength) charLength = a;
 
-   return (4.0 * volume) / math.sqrt( charLength );
+   return (FOUR * volume) / math.sqrt( charLength );
 }
 
 fn CalcElemVelocityGradient(xvel: [8]Real_t, yvel: [8]Real_t,
@@ -1366,6 +1383,7 @@ fn CalcElemVelocityGradient(xvel: [8]Real_t, yvel: [8]Real_t,
                             b: [3][8]Real_t, detJ: Real_t, d: []Real_t)
                             void
 {
+   @setFloatMode(.optimized);
    const inv_detJ = ONE / detJ;
    const pfx = b[0];
    const pfy = b[1];
@@ -1433,6 +1451,7 @@ fn UpdatePos(deltaTime: Real_t,
              xd_local: [8]Real_t, yd_local: [8]Real_t, zd_local: [8]Real_t)
              void
 {
+  @setFloatMode(.optimized);
   const dt2 = deltaTime * HALF;
   var idx: Index_t = 0;
   while ( idx < 8 ) : ( idx += 1 ) {
@@ -1450,6 +1469,7 @@ fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
                           vnew: [*]Real_t, delv: [*]Real_t, arealg: [*]Real_t,
                           deltaTime: Real_t, numElem: Index_t) void
 {
+  @setFloatMode(.optimized);
   // loop over all elements
   var k: Index_t = 0;
   while ( k < numElem ) : ( k += 1 ) {
@@ -1500,6 +1520,7 @@ fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
 
 fn VolErr2(domain: *Domain, numElem: Index_t) bool
 {
+  @setFloatMode(.optimized);
   var vdovv = domain.vdov;
   var dxx = domain.dxx;
   var dyy = domain.dyy;
@@ -1559,9 +1580,10 @@ fn CalcMonotonicQGradientsForElems(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
                                    nodelist: [*][8]Index_t,
                                    numElem: Index_t) void
 {
+   @setFloatMode(.optimized);
    var idx: Index_t = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
-      const ptiny = 1.0e-36;
+      const ptiny: Real_t = 1.0e-36;
 
       const elemToNode = nodelist[idx];
 
@@ -1707,6 +1729,7 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
                                 monoq_max_slope: Real_t,
                                 ptiny: Real_t, numElem: Index_t) void
 {
+   @setFloatMode(.optimized);
    var idx: Index_t = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
       const bcMask: u32 = elemBC[idx];
@@ -1718,13 +1741,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
          0                    => delv_xi[lxim[idx]],
          BCbits(BC.XI_M_SYMM) => delv_xi[idx],
          BCbits(BC.XI_M_FREE) => ZERO,
-         else                 => undefined,
+         else                 => undefined
       };
       var delvp : Real_t = switch (bcMask & BCbits(BC.XI_P)) {
          0                    => delv_xi[lxip[idx]],
          BCbits(BC.XI_P_SYMM) => delv_xi[idx],
          BCbits(BC.XI_P_FREE) => ZERO,
-         else                 => undefined,
+         else                 => undefined
       };
 
       delvm = delvm * norm;
@@ -1748,13 +1771,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
          0                      => delv_eta[letam[idx]],
          BCbits(BC.ETA_M_SYMM)  => delv_eta[idx],
          BCbits(BC.ETA_M_FREE)  => ZERO,
-         else                   => undefined,
+         else                   => undefined
       };
       delvp = switch (bcMask & BCbits(BC.ETA_P)) {
          0                      => delv_eta[letap[idx]],
          BCbits(BC.ETA_P_SYMM)  => delv_eta[idx],
          BCbits(BC.ETA_P_FREE)  => ZERO,
-         else                   => undefined,
+         else                   => undefined
       };
 
       delvm = delvm * norm;
@@ -1777,13 +1800,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
          0                      => delv_zeta[lzetam[idx]],
          BCbits(BC.ZETA_M_SYMM) => delv_zeta[idx],
          BCbits(BC.ZETA_M_FREE) => ZERO,
-         else                   => undefined,
+         else                   => undefined
       };
       delvp = switch (bcMask & BCbits(BC.ZETA_P)) {
          0                      => delv_zeta[lzetap[idx]],
          BCbits(BC.ZETA_P_SYMM) => delv_zeta[idx],
          BCbits(BC.ZETA_P_FREE) => ZERO,
-         else                   => undefined,
+         else                   => undefined
       };
 
       delvm = delvm * norm;
@@ -1845,7 +1868,7 @@ fn CalcMonotonicQForElems(domain: *Domain) void
       //
       // initialize parameters
       // 
-      const ptiny = 1.e-36;
+      const ptiny: Real_t = 1.e-36;
 
       CalcMonotonicQRegionForElems(
                            domain.elemBC,
@@ -1914,6 +1937,7 @@ fn CalcPressureForElems(p_new: [*]Real_t, bvc: [*]Real_t,
                         pmin: Real_t, p_cut: Real_t, eosvmax: Real_t,
                         length:Index_t) void
 {
+   @setFloatMode(.optimized);
    const c1s = TWO / THREE ;
 
    var idx: Index_t = 0;
@@ -1947,6 +1971,7 @@ fn CalcEnergyForElems(p_new: [*]Real_t, e_new: [*]Real_t, q_new: [*]Real_t,
                       ql_old: [*]Real_t, rho0: Real_t, eosvmax: Real_t,
                       pHalfStep: [*]Real_t, length: Index_t) void
 {
+   @setFloatMode(.optimized);
    const sixth = ONE / SIX;
 
    var idx: Index_t = 0;
@@ -2065,6 +2090,7 @@ fn CalcSoundSpeedForElems(length: Index_t, ss: [*]Real_t,
                           pnewc: [*]Real_t, pbvc: [*]Real_t,
                           bvc: [*]Real_t) void
 {
+   @setFloatMode(.optimized);
    var idx: Index_t = 0;
    while( idx < length ) : ( idx += 1 ) {
       var ssTmp: Real_t = (pbvc[idx] * enewc[idx] + vnewc[idx] * vnewc[idx] *
@@ -2090,6 +2116,7 @@ fn EvalCopy(p_old: [*]Real_t, p: [*]Real_t, numElem: Index_t) void
 fn EvalCompression(compression: [*]Real_t, compHalfStep: [*]Real_t,
                    numElem: Index_t, vnewc: [*]Real_t, delvc: [*]Real_t) void
 {
+  @setFloatMode(.optimized);
   var idx: Index_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     compression[idx] = ONE / vnewc[idx] - ONE;
@@ -2293,6 +2320,7 @@ fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
                                  vdov: [*]Real_t, arealg: [*]Real_t,
                                  qqc: Real_t, dtcourant: *Real_t) void
 {
+   @setFloatMode(.optimized);
    var dtcourant_tmp: Real_t = 1.0e+20;
    var courant_elem: bool = false;
    // var courant_elem: Index_t = -1;
@@ -2338,6 +2366,7 @@ fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
 fn CalcHydroConstraintForElems(length: Index_t, vdov: [*]Real_t,
                                dvovmax: Real_t, dthydro: *Real_t) void
 {
+   const psmall: Real_t = 1.0e-20;
    var dthydro_tmp: Real_t = 1.0e+20;
    var hydro_elem: bool = false;
    // var hydro_elem: Index_t = -1;
@@ -2345,7 +2374,7 @@ fn CalcHydroConstraintForElems(length: Index_t, vdov: [*]Real_t,
    var indx: Index_t = 0;
    while ( indx < length) : ( indx += 1 ) {
       if (vdov[indx] != ZERO) {
-         const dtdvov = dvovmax / (@abs(vdov[indx])+1.0e-20);
+         const dtdvov = dvovmax / (@abs(vdov[indx])+psmall);
          if ( dthydro_tmp > dtdvov ) {
             dthydro_tmp = dtdvov;
             hydro_elem = true;
@@ -2386,6 +2415,7 @@ fn LagrangeLeapFrog(domain: *Domain) void
 
 pub fn main() !void
 {
+   @setFloatMode(.optimized);
    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
    defer arena.deinit();
 
@@ -2537,14 +2567,14 @@ pub fn main() !void
       .u_cut     = 1.0e-7,
       .v_cut     = 1.0e-10,
 
-      .hgcoef    = 3.0,
+      .hgcoef    = THREE,
 
       .qstop              = 1.0e+12,
       .monoq_max_slope    = ONE,
-      .monoq_limiter_mult = 2.0,
+      .monoq_limiter_mult = TWO,
       .qlc_monoq          = HALF,
-      .qqc_monoq          = 2.0/3.0,
-      .qqc                = 2.0,
+      .qqc_monoq          = TWO/THREE,
+      .qqc                = TWO,
 
       .pmin      =  ZERO,
       .emin      = -1.0e+15,
@@ -2672,7 +2702,7 @@ pub fn main() !void
       var j: Index_t = 0;
       while ( j < 8 ) : ( j += 1 ) {
          const idx = elemToNode[j];
-         domain.nodalMass[idx] += volume / 8.0;
+         domain.nodalMass[idx] += volume / EIGHT;
       }
    }
 
