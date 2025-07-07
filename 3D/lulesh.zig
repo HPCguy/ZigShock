@@ -469,11 +469,11 @@ fn CalcElemNodeNormals(pfx: []Real_t, pfy: []Real_t, pfz: []Real_t,
    // pfx = .{ ZERO } ** 8;
    // pfy = .{ ZERO } ** 8;
    // pfz = .{ ZERO } ** 8;
-   var i: Iter_t = 0;
-   while ( i < 8 ) : ( i += 1 ) {
-      pfx[i] = ZERO;
-      pfy[i] = ZERO;
-      pfz[i] = ZERO;
+   var idx: Iter_t = 0;
+   while ( idx < 8 ) : ( idx += 1 ) {
+      pfx[idx] = ZERO;
+      pfy[idx] = ZERO;
+      pfz[idx] = ZERO;
    }
    // evaluate face one: nodes 0, 1, 2, 3
    SumElemFaceNormal(&pfx[0], &pfy[0], &pfz[0],
@@ -525,14 +525,11 @@ fn SumElemStressesToNodeForces(B: [3][8]Real_t, stress_xx: Real_t,
                                void
 {
   @setFloatMode(IEEEmode);
-  // fx.data = - ( stress_xx * B[0].data );
-  // fy.data = - ( stress_yy * B[1].data );
-  // fz.data = - ( stress_zz * B[2].data );
-  var i: Iter_t = 0;
-  while ( i < 8 ) : ( i += 1 ) {
-     fx[i] = - ( stress_xx * B[0][i] );
-     fy[i] = - ( stress_yy * B[1][i] );
-     fz[i] = - ( stress_zz * B[2][i] );
+  var idx: Iter_t = 0;
+  while ( idx < 8 ) : ( idx += 1 ) {
+     fx[idx] = - ( stress_xx * B[0][idx] );
+     fy[idx] = - ( stress_yy * B[1][idx] );
+     fz[idx] = - ( stress_zz * B[2][idx] );
   }
 }
 
@@ -570,9 +567,9 @@ fn IntegrateStressForElems(nodelist: [*]const [8]Index_t,
                            determ: [*]Real_t, numElem: Iter_t) void
 {
   // loop over all elements
-  var k: Iter_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
-    const elemNodes = nodelist[k];
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
+    const elemNodes = nodelist[idx];
 
     var B: [3][8]Real_t = undefined; // shape function derivatives
 
@@ -585,7 +582,7 @@ fn IntegrateStressForElems(nodelist: [*]const [8]Index_t,
       GatherNodes(elemNodes, x, y, z, &x_local, &y_local, &z_local);
 
       // Volume calculation involves extra work for numerical consistency.
-      determ[k] =
+      determ[idx] =
          CalcElemShapeFunctionDerivatives(x_local, y_local, z_local, &B);
 
       CalcElemNodeNormals( &B[0] , &B[1], &B[2],
@@ -597,7 +594,7 @@ fn IntegrateStressForElems(nodelist: [*]const [8]Index_t,
       var fy_local: [8]Real_t = undefined;
       var fz_local: [8]Real_t = undefined;
 
-      SumElemStressesToNodeForces( B, sigxx[k], sigyy[k], sigzz[k],
+      SumElemStressesToNodeForces( B, sigxx[idx], sigyy[idx], sigzz[idx],
                                    &fx_local, &fy_local, &fz_local );
 
       // sum nodal force contributions to global force arrray.
@@ -906,10 +903,10 @@ fn FBKernel(x8ni: [8]Real_t, y8ni: [8]Real_t, z8ni: [8]Real_t,
               hourgam: [][8]Real_t, volinv: Real_t) void
 {
    @setFloatMode(IEEEmode);
-   var k1: Iter_t = 0;
-   while( k1 < 4 ) : ( k1 += 1) {
-      const gami = gammaa[k1];
-      var hg = &hourgam[k1];
+   var idx: Iter_t = 0;
+   while( idx < 4 ) : ( idx += 1) {
+      const gami = gammaa[idx];
+      var hg = &hourgam[idx];
 
       const hourmodx =
          x8ni[0] * gami[0] + x8ni[1] * gami[1] +
@@ -975,23 +972,23 @@ fn CalcFBHourglassForceForElems(nodelist: [*]const [8]Index_t,
 {
    // Calculates the Flanagan-Belytschko anti-hourglass force.
 
-   var k2: Iter_t = 0;
-   while ( k2 < numElem ) : ( k2 += 1 ) {
-      const elemToNode = nodelist[k2];
+   var idx: Iter_t = 0;
+   while ( idx < numElem ) : ( idx += 1 ) {
+      const elemToNode = nodelist[idx];
 
       // compute the hourglass modes */
 
       var hourgam: [4][8]Real_t = undefined;
 
-      FBKernel( x8n[k2],  y8n[k2],  z8n[k2],
-               dvdx[k2], dvdy[k2], dvdz[k2],
-               &hourgam, ONE/determ[k2]);
+      FBKernel( x8n[idx],  y8n[idx],  z8n[idx],
+               dvdx[idx], dvdy[idx], dvdz[idx],
+               &hourgam, ONE/determ[idx]);
 
       // compute forces
 
-      const   ss1 = ss[k2];
-      const mass1 = elemMass[k2];
-      const volume13 = math.cbrt(determ[k2]);
+      const   ss1 = ss[idx];
+      const mass1 = elemMass[idx];
+      const volume13 = math.cbrt(determ[idx]);
 
       var  xd1: [8]Real_t = undefined;
       var  yd1: [8]Real_t = undefined;
@@ -1014,11 +1011,11 @@ fn CalcFBHourglassForceForElems(nodelist: [*]const [8]Index_t,
 fn CopyBlock(dst1: []Real_t, dst2: []Real_t, dst3: []Real_t,
              src1: [8]Real_t, src2: [8]Real_t, src3: [8]Real_t) void
 {
-  var i: Iter_t = 0;
-  while ( i < 8 ) : ( i += 1 ) {
-    dst1[i] = src1[i];
-    dst2[i] = src2[i];
-    dst3[i] = src3[i];
+  var idx: Iter_t = 0;
+  while ( idx < 8 ) : ( idx += 1 ) {
+    dst1[idx] = src1[idx];
+    dst2[idx] = src2[idx];
+    dst3[idx] = src3[idx];
   }
 }
 
@@ -1075,9 +1072,9 @@ fn CalcHourglassControlForElems(domain: *Domain,
 
 fn VolErr1(determ: [*]const Real_t, numElem: Iter_t) bool
 {
-  var k: Iter_t = 0;
-  while (k < numElem) : ( k += 1 ) {
-    if ( determ[k] <= ZERO ) return true;
+  var idx: Iter_t = 0;
+  while (idx < numElem) : ( idx += 1 ) {
+    if ( determ[idx] <= ZERO ) return true;
   }
   return false;
 }
@@ -1119,11 +1116,11 @@ fn CalcForceForNodes(domain: *Domain) void
   var fy = domain.fy;
   var fz = domain.fz;
 
-  var i: Iter_t = 0;
-  while (i < numNode) : ( i += 1 ) {
-     fx[i] = ZERO;
-     fy[i] = ZERO;
-     fz[i] = ZERO;
+  var idx: Iter_t = 0;
+  while (idx < numNode) : ( idx += 1 ) {
+     fx[idx] = ZERO;
+     fy[idx] = ZERO;
+     fz[idx] = ZERO;
   }
 }
 
@@ -1132,11 +1129,11 @@ fn CalcAccelerationForNodes(xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
                             fz: [*]const Real_t, nodalMass: [*]const Real_t,
                             numNode: Iter_t) void
 {
-   var k: Iter_t = 0;
-   while ( k < numNode ) : ( k += 1 ) {
-      xdd[k] = fx[k] / nodalMass[k];
-      ydd[k] = fy[k] / nodalMass[k];
-      zdd[k] = fz[k] / nodalMass[k];
+   var idx: Iter_t = 0;
+   while ( idx < numNode ) : ( idx += 1 ) {
+      xdd[idx] = fx[idx] / nodalMass[idx];
+      ydd[idx] = fy[idx] / nodalMass[idx];
+      zdd[idx] = fz[idx] / nodalMass[idx];
    }
 }
 
@@ -1149,11 +1146,11 @@ fn ApplyAccelerationBoundaryConditionsForNodes(xdd: [*]Real_t, ydd: [*]Real_t,
 {
   const numNodeBC = (size+1)*(size+1);
 
-  var k: Iter_t = 0;
-  while ( k < numNodeBC ) : ( k += 1 ) {
-     xdd[symmX[k]] = ZERO;
-     ydd[symmY[k]] = ZERO;
-     zdd[symmZ[k]] = ZERO;
+  var idx: Iter_t = 0;
+  while ( idx < numNodeBC ) : ( idx += 1 ) {
+     xdd[symmX[idx]] = ZERO;
+     ydd[symmY[idx]] = ZERO;
+     zdd[symmZ[idx]] = ZERO;
   }
 }
 
@@ -1183,11 +1180,11 @@ fn CalcPositionForNodes(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
                         numNode: Iter_t) void
 {
    @setFloatMode(IEEEmode);
-   var k: Iter_t = 0;
-   while ( k < numNode ) : ( k += 1 ) {
-     x[k] += xd[k] * dt;
-     y[k] += yd[k] * dt;
-     z[k] += zd[k] * dt;
+   var idx: Iter_t = 0;
+   while ( idx < numNode ) : ( idx += 1 ) {
+     x[idx] += xd[idx] * dt;
+     y[idx] += yd[idx] * dt;
+     z[idx] += zd[idx] * dt;
    }
 }
 
@@ -1487,9 +1484,9 @@ fn CalcKinematicsForElems(nodelist: [*]const [8]Index_t,
 {
   @setFloatMode(IEEEmode);
   // loop over all elements
-  var k: Iter_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
-    const elemToNode = nodelist[k];
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
+    const elemToNode = nodelist[idx];
 
     var  x_local: [8]Real_t = undefined;
     var  y_local: [8]Real_t = undefined;
@@ -1507,13 +1504,13 @@ fn CalcKinematicsForElems(nodelist: [*]const [8]Index_t,
 
     // volume calculations
     const volume = CalcElemVolume(x_local, y_local, z_local);
-    const relativeVolume = volume / volo[k];
-    vnew[k] = relativeVolume;
-    delv[k] = relativeVolume - v[k];
+    const relativeVolume = volume / volo[idx];
+    vnew[idx] = relativeVolume;
+    delv[idx] = relativeVolume - v[idx];
 
     // set characteristic length
-    arealg[k] = CalcElemCharacteristicLength(x_local, y_local, z_local,
-                                             volume);
+    arealg[idx] = CalcElemCharacteristicLength(x_local, y_local, z_local,
+                                               volume);
 
     // get nodal velocities from global array and copy into local arrays.
     GatherNodes(elemToNode, xd, yd, zd, &xd_local, &yd_local, &zd_local);
@@ -1528,9 +1525,9 @@ fn CalcKinematicsForElems(nodelist: [*]const [8]Index_t,
                                B, detJ, &D );
 
     // put velocity gradient quantities into their global arrays.
-    dxx[k] = D[0];
-    dyy[k] = D[1];
-    dzz[k] = D[2];
+    dxx[idx] = D[0];
+    dyy[idx] = D[1];
+    dzz[idx] = D[2];
   }
 }
 
@@ -1543,20 +1540,20 @@ fn VolErr2(domain: *Domain, numElem: Iter_t) bool
   var dzz = domain.dzz;
   const vnew = domain.vnew;
 
-  var k: Iter_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
     // calc strain rate and apply as constraint (only done in FB element)
-    const vdov = dxx[k] + dyy[k] + dzz[k];
+    const vdov = dxx[idx] + dyy[idx] + dzz[idx];
     const vdovthird = vdov * (ONE / THREE );
 
     // make the rate of deformation tensor deviatoric
-    vdovv[k] = vdov;
-    dxx[k] -= vdovthird;
-    dyy[k] -= vdovthird;
-    dzz[k] -= vdovthird;
+    vdovv[idx] = vdov;
+    dxx[idx] -= vdovthird;
+    dyy[idx] -= vdovthird;
+    dzz[idx] -= vdovthird;
 
     // See if any volumes are negative, and take appropriate action.
-    if (vnew[k] <= ZERO)
+    if (vnew[idx] <= ZERO)
     {
       return true;
     }
@@ -2310,14 +2307,14 @@ fn UpdateVolumesForElems(vnew: [*]const Real_t, v: [*]Real_t,
                          v_cut: Real_t, length: Iter_t) void
 {
    if (length != 0) {
-      var k: Iter_t = 0;
-      while ( k < length ) : ( k += 1 ) {
-         var tmpV: Real_t = vnew[k];
+      var idx: Iter_t = 0;
+      while ( idx < length ) : ( idx += 1 ) {
+         var tmpV: Real_t = vnew[idx];
 
          if ( @abs(tmpV - ONE) < v_cut )
             tmpV = ONE;
 
-         v[k] = tmpV;
+         v[idx] = tmpV;
       }
    }
 
@@ -2348,28 +2345,28 @@ fn CalcCourantConstraintForElems(length: Iter_t, ss: [*]const Real_t,
 
    const qqc2 = SIXTYFOUR * qqc * qqc;
 
-   var indx: Iter_t = 0;
-   while ( indx < length) : ( indx += 1 ) {
+   var idx: Iter_t = 0;
+   while ( idx < length) : ( idx += 1 ) {
 
-      var dtf: Real_t = ss[indx] * ss[indx];
+      var dtf: Real_t = ss[idx] * ss[idx];
 
-      if ( vdov[indx] < ZERO ) {
+      if ( vdov[idx] < ZERO ) {
 
          dtf = dtf
-            + qqc2 * arealg[indx] * arealg[indx] * vdov[indx] * vdov[indx];
+            + qqc2 * arealg[idx] * arealg[idx] * vdov[idx] * vdov[idx];
       }
 
       dtf = math.sqrt( dtf );
 
-      dtf = arealg[indx] / dtf;
+      dtf = arealg[idx] / dtf;
 
       // determine minimum timestep with its corresponding elem
 
-      if (vdov[indx] != ZERO) {
+      if (vdov[idx] != ZERO) {
          if ( dtf < dtcourant_tmp ) {
             dtcourant_tmp = dtf;
             courant_elem = true;
-            // courant_elem = indx;
+            // courant_elem = idx;
          }
       }
    }
@@ -2392,14 +2389,14 @@ fn CalcHydroConstraintForElems(length: Iter_t, vdov: [*]const Real_t,
    var hydro_elem: bool = false;
    // var hydro_elem: Iter_t = -1;
 
-   var indx: Iter_t = 0;
-   while ( indx < length) : ( indx += 1 ) {
-      if (vdov[indx] != ZERO) {
-         const dtdvov = dvovmax / (@abs(vdov[indx])+psmall);
+   var idx: Iter_t = 0;
+   while ( idx < length) : ( idx += 1 ) {
+      if (vdov[idx] != ZERO) {
+         const dtdvov = dvovmax / (@abs(vdov[idx])+psmall);
          if ( dthydro_tmp > dtdvov ) {
             dthydro_tmp = dtdvov;
             hydro_elem = true;
-            // hydro_elem = indx;
+            // hydro_elem = idx;
          }
       }
    }
