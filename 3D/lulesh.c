@@ -139,7 +139,9 @@ typedef struct Domain_s {
 
    /* Elem temporaries */
 
-   Real_t *vnew;          /* new relative volume -- temporary */
+   Real_t *dxx;           /* principal strains -- temporary */
+   Real_t *dyy;
+   Real_t *dzz;
 
    Real_t *delv_xi;       /* velocity gradient -- temporary */
    Real_t *delv_eta;
@@ -149,9 +151,33 @@ typedef struct Domain_s {
    Real_t *delx_eta;
    Real_t *delx_zeta;
 
-   Real_t *dxx;           /* principal strains -- temporary */
-   Real_t *dyy;
-   Real_t *dzz;
+   Real_t *sigxx;
+   Real_t *sigyy;
+   Real_t *sigzz;
+
+   Real_t *dvdx;
+   Real_t *dvdy;
+   Real_t *dvdz;
+
+   Real_t *x8n;
+   Real_t *y8n;
+   Real_t *z8n;
+
+   Real_t *determ;
+   Real_t *vnew;          /* new relative volume -- temporary */
+   Real_t *vnewc;
+
+   Real_t *p_old;
+   Real_t *p_new;
+   Real_t *pHalfStep;
+   Real_t *q_new;
+   Real_t *e_new;
+   Real_t *bvc;
+   Real_t *pbvc;
+   Real_t *work;
+
+   Real_t *compression;
+   Real_t *compHalfStep;
 
    /* Node-centered */
 
@@ -222,28 +248,6 @@ typedef struct Domain_s {
 
    Iter_t numNode;
 } Domain;
-
-Real_t *dvdx_;
-Real_t *dvdy_;
-Real_t *dvdz_;
-Real_t *x8n_;
-Real_t *y8n_;
-Real_t *z8n_;
-Real_t *sigxx_;
-Real_t *sigyy_;
-Real_t *sigzz_;
-Real_t *determ_;
-Real_t *p_old_;
-Real_t *compression_;
-Real_t *compHalfStep_;
-Real_t *work_;
-Real_t *p_new_;
-Real_t *e_new_;
-Real_t *q_new_;
-Real_t *bvc_;
-Real_t *pbvc_;
-Real_t *pHalfStep_;
-Real_t *vnewc_;
 
 Real_t *AllocateReal(int size)
 {
@@ -1096,12 +1100,12 @@ void CalcHourglassControlForElems(Domain *domain,
                                   Real_t *determ, Real_t hgcoef)
 {
    Iter_t numElem = domain->numElem;
-   Real_t *dvdx = dvdx_;
-   Real_t *dvdy = dvdy_;
-   Real_t *dvdz = dvdz_;
-   Real_t *x8n  = x8n_;
-   Real_t *y8n  = y8n_;
-   Real_t *z8n  = z8n_;
+   Real_t *dvdx = domain->dvdx;
+   Real_t *dvdy = domain->dvdy;
+   Real_t *dvdz = domain->dvdz;
+   Real_t *x8n  = domain->x8n;
+   Real_t *y8n  = domain->y8n;
+   Real_t *z8n  = domain->z8n;
 
    /* start loop over elements */
    for (Iter_t idx=0; idx<numElem; ++idx) {
@@ -1136,13 +1140,6 @@ void CalcHourglassControlForElems(Domain *domain,
                                     hgcoef, numElem);
    }
 
-   // Release((void **) &z8n);
-   // Release((void **) &y8n);
-   // Release((void **) &x8n);
-   // Release((void **) &dvdz);
-   // Release((void **) &dvdy);
-   // Release((void **) &dvdx);
-
    return ;
 }
 
@@ -1159,10 +1156,10 @@ void CalcVolumeForceForElems(Domain *domain)
    Iter_t numElem = domain->numElem;
    if (numElem != 0) {
       Real_t  hgcoef = domain->hgcoef;
-      Real_t *sigxx  = sigxx_;
-      Real_t *sigyy  = sigyy_;
-      Real_t *sigzz  = sigzz_;
-      Real_t *determ = determ_;
+      Real_t *sigxx  = domain->sigxx;
+      Real_t *sigyy  = domain->sigyy;
+      Real_t *sigzz  = domain->sigzz;
+      Real_t *determ = domain->determ;
 
       /* Sum contributions to total stress tensor */
       InitStressTermsForElems(domain->p, domain->q,
@@ -1180,11 +1177,6 @@ void CalcVolumeForceForElems(Domain *domain)
          exit(VolumeError);
 
       CalcHourglassControlForElems(domain, determ, hgcoef);
-
-      // Release((void **) &determ);
-      // Release((void **) &sigzz);
-      // Release((void **) &sigyy);
-      // Release((void **) &sigxx);
    }
 }
 
@@ -1652,11 +1644,7 @@ void CalcLagrangeElements(Domain *domain)
 {
    Iter_t numElem = domain->numElem;
    if (numElem > 0) {
-       Real_t deltatime = domain->deltatime;
-
-      // domain->dxx  = AllocateReal(numElem); /* principal strains */
-      // domain->dyy  = AllocateReal(numElem);
-      // domain->dzz  = AllocateReal(numElem);
+      Real_t deltatime = domain->deltatime;
 
       CalcKinematicsForElems(domain->nodelist,
                              domain->x, domain->y, domain->z,
@@ -1669,10 +1657,6 @@ void CalcLagrangeElements(Domain *domain)
       // element loop to do some stuff not included in the elemlib function.
       if (VolErr2(domain, numElem))
          exit(VolumeError);
-
-      // Release((void **) &domain->dzz);
-      // Release((void **) &domain->dyy);
-      // Release((void **) &domain->dxx);
    }
 }
 
@@ -2015,16 +1999,6 @@ void CalcQForElems(Domain *domain)
    Iter_t numElem = domain->numElem;
 
    if (numElem != 0) {
-      /* allocate domain length arrays */
-
-      // domain->delv_xi = AllocateReal(numElem);   /* velocity gradient */
-      // domain->delv_eta = AllocateReal(numElem);
-      // domain->delv_zeta = AllocateReal(numElem);
-
-      // domain->delx_xi = AllocateReal(numElem);   /* position gradient */
-      // domain->delx_eta = AllocateReal(numElem);
-      // domain->delx_zeta = AllocateReal(numElem);
-
       /* Calculate velocity gradients, applied at the domain level */
       CalcMonotonicQGradientsForElems(domain->x,  domain->y,  domain->z,
                                       domain->xd, domain->yd, domain->zd,
@@ -2038,21 +2012,8 @@ void CalcQForElems(Domain *domain)
                                       domain->nodelist,
                                       numElem);
 
-      /* Transfer veloctiy gradients in the first order elements */
-      /* problem->commElements->Transfer(CommElements::monoQ); */
-
       /* This will be applied at the region level */
       CalcMonotonicQForElems(domain);
-
-      /* release domain length arrays */
-
-      // Release((void **) &domain->delx_zeta);
-      // Release((void **) &domain->delx_eta);
-      // Release((void **) &domain->delx_xi);
-
-      // Release((void **) &domain->delv_zeta);
-      // Release((void **) &domain->delv_eta);
-      // Release((void **) &domain->delv_xi);
 
       /* Don't allow excessive artificial viscosity */
       if (Qerr(domain->q, numElem, domain->qstop) >= 0)
@@ -2101,7 +2062,6 @@ void CalcEnergyForElems(Real_t *p_new, Real_t *e_new, Real_t *q_new,
                         Real_t *pHalfStep, Iter_t length)
 {
    // Real_t sixth = ONE / SIX;
-   // Real_t *pHalfStep = AllocateReal(length);
 
    for (Iter_t i=0; i<length; ++i) {
       e_new[i] = e_old[i] - delvc[i]*(p_old[i] + q_old[i]) * HALF +
@@ -2206,8 +2166,6 @@ void CalcEnergyForElems(Real_t *p_new, Real_t *e_new, Real_t *q_new,
       }
    }
 
-   // Release((void **) &pHalfStep);
-
    return ;
 }
 
@@ -2302,21 +2260,17 @@ void EvalEOSForElems(Domain *domain, Real_t *vnewc, Iter_t numElem)
    Real_t emin    = domain->emin;
    Real_t rho0    = domain->refdens;
 
-   /* allocate *domain length* arrays.  */
-   /* wastes memory, but allows us to get */
-   /* around a "temporary workset" issue */
-   /* we have not yet addressed. */
    Real_t *delvc = domain->delv;
-   Real_t *p_old = p_old_;
-   Real_t *compression = compression_;
-   Real_t *compHalfStep = compHalfStep_;
-   Real_t *work = work_;
-   Real_t *p_new = p_new_;
-   Real_t *e_new = e_new_;
-   Real_t *q_new = q_new_;
-   Real_t *bvc = bvc_;
-   Real_t *pbvc = pbvc_;
-   Real_t *pHalfStep = pHalfStep_;
+   Real_t *p_old = domain->p_old;
+   Real_t *compression = domain->compression;
+   Real_t *compHalfStep = domain->compHalfStep;
+   Real_t *work = domain->work;
+   Real_t *p_new = domain->p_new;
+   Real_t *e_new = domain->e_new;
+   Real_t *q_new = domain->q_new;
+   Real_t *bvc = domain->bvc;
+   Real_t *pbvc = domain->pbvc;
+   Real_t *pHalfStep = domain->pHalfStep;
 
    /* compress data, minimal set */
    EvalCopy(p_old, domain->p, numElem);
@@ -2345,19 +2299,7 @@ void EvalEOSForElems(Domain *domain, Real_t *vnewc, Iter_t numElem)
    UpdatePE(domain->p, p_new, domain->e, e_new, domain->q, q_new, numElem);
 
    CalcSoundSpeedForElems(numElem, domain->ss,
-             vnewc, rho0, e_new, p_new,
-             pbvc, bvc, ss4o3);
-
-   // Release((void **) &pHalfStep);
-   // Release((void **) &pbvc);
-   // Release((void **) &bvc);
-   // Release((void **) &q_new);
-   // Release((void **) &e_new);
-   // Release((void **) &p_new);
-   // Release((void **) &work);
-   // Release((void **) &compHalfStep);
-   // Release((void **) &compression);
-   // Release((void **) &p_old);
+             vnewc, rho0, e_new, p_new, pbvc, bvc, ss4o3);
 }
 
 int VolErr3(Real_t *vnewc, Real_t *vnew, Real_t *v, Iter_t numElem,
@@ -2403,20 +2345,18 @@ void ApplyMaterialPropertiesForElems(Domain *domain)
   if (numElem != 0) {
     /* Expose all of the variables needed for material evaluation */
 
+    // Legacy comment, to see this app is simplified from original:
     /* create a domain length (not material length) temporary */
     /* we are assuming here that the number of dense ranges is */
     /* much greater than the number of sigletons.  We are also */
     /* assuming it is ok to allocate a domain length temporary */
     /* rather than a material length temporary. */
 
-    if (VolErr3(vnewc_, domain->vnew, domain->v, numElem,
+    if (VolErr3(domain->vnewc, domain->vnew, domain->v, numElem,
                 domain->eosvmin, domain->eosvmax))
        exit(VolumeError);
 
-    EvalEOSForElems(domain, vnewc_, numElem);
-
-    // Release((void **) &vnewc);
-
+    EvalEOSForElems(domain, domain->vnewc, numElem);
   }
 }
 
@@ -2440,9 +2380,6 @@ void UpdateVolumesForElems(Real_t *vnew, Real_t *v,
 
 void LagrangeElements(Domain *domain, Iter_t numElem)
 {
-  /* new relative volume -- temporary */
-  // domain->vnew = AllocateReal(numElem);
-
   CalcLagrangeElements(domain);
 
   /* Calculate Q.  (Monotonic q option requires communication) */
@@ -2452,8 +2389,6 @@ void LagrangeElements(Domain *domain, Iter_t numElem)
 
   UpdateVolumesForElems(domain->vnew, domain->v,
                         domain->v_cut, numElem);
-
-  // Release((void **) &domain->vnew);
 }
 
 void CalcCourantConstraintForElems(Iter_t length, Real_t *ss,
@@ -2642,46 +2577,45 @@ int main(int argc, char *argv[])
    domain.symmY = AllocateIndex(edgeNodes*edgeNodes);
    domain.symmZ = AllocateIndex(edgeNodes*edgeNodes);
 
-   dvdx_ = AllocateReal(domElems*8);
-   dvdy_ = AllocateReal(domElems*8);
-   dvdz_ = AllocateReal(domElems*8);
+   domain.dxx  = AllocateReal(domElems); // principal strains
+   domain.dyy  = AllocateReal(domElems);
+   domain.dzz  = AllocateReal(domElems);
 
-   x8n_  = AllocateReal(domElems*8);
-   y8n_  = AllocateReal(domElems*8);
-   z8n_  = AllocateReal(domElems*8);
+   domain.delv_xi   = AllocateReal(domElems); // velocity gradient
+   domain.delv_eta  = AllocateReal(domElems);
+   domain.delv_zeta = AllocateReal(domElems);
 
-   sigxx_  = /* AllocateReal(domElems) */ dvdx_;
-   sigyy_  = /* AllocateReal(domElems) */ sigxx_ + domElems;
-   sigzz_  = /* AllocateReal(domElems) */ sigyy_ + domElems;
+   domain.delx_xi   = AllocateReal(domElems); /* position gradient */
+   domain.delx_eta  = AllocateReal(domElems);
+   domain.delx_zeta = AllocateReal(domElems);
 
-   determ_ = AllocateReal(domElems);
-   vnewc_ = /* AllocateReal(domElems) */ dvdx_;
+   domain.sigxx  = AllocateReal(domElems);
+   domain.sigyy  = AllocateReal(domElems);
+   domain.sigzz  = AllocateReal(domElems);
 
-   p_old_ = /* AllocateReal(domElems) */ vnewc_ + domElems;
-   compression_ = /* AllocateReal(domElems) */ p_old_ + domElems;
-   compHalfStep_ = /* AllocateReal(domElems) */ compression_ + domElems;
-   work_ = /* AllocateReal(domElems) */ compHalfStep_ + domElems;
-   p_new_ = /* AllocateReal(domElems) */ work_ + domElems;
-   e_new_ = /* AllocateReal(domElems) */ p_new_ + domElems;
-   q_new_ = /* AllocateReal(domElems) */ e_new_ + domElems;
-   bvc_   = /* AllocateReal(domElems) */ dvdy_;
-   pbvc_  = /* AllocateReal(domElems) */ bvc_ + domElems;
-   pHalfStep_ = /* AllocateReal(domElems) */ pbvc_ + domElems;
+   domain.dvdx = AllocateReal(domElems*8);
+   domain.dvdy = AllocateReal(domElems*8);
+   domain.dvdz = AllocateReal(domElems*8);
 
-   domain.dxx  = /* AllocateReal(domElems) */ dvdx_; // principal strains
-   domain.dyy  = /* AllocateReal(domElems) */ domain.dxx + domElems;
-   domain.dzz  = /* AllocateReal(domElems) */ domain.dyy + domElems;
+   domain.x8n  = AllocateReal(domElems*8);
+   domain.y8n  = AllocateReal(domElems*8);
+   domain.z8n  = AllocateReal(domElems*8);
 
-   domain.delv_xi   = /* AllocateReal(domElems) */ dvdx_; // velocity gradient
-   domain.delv_eta  = /* AllocateReal(domElems) */ domain.delv_xi + domElems;
-   domain.delv_zeta = /* AllocateReal(domElems) */ domain.delv_eta + domElems;
+   domain.determ = AllocateReal(domElems);
+   domain.vnew   = AllocateReal(domElems);
+   domain.vnewc  = AllocateReal(domElems);
 
-   /* position gradient */
-   domain.delx_xi   = /* AllocateReal(domElems) */ domain.delv_zeta + domElems;
-   domain.delx_eta  = /* AllocateReal(domElems) */ domain.delx_xi + domElems;
-   domain.delx_zeta = /* AllocateReal(domElems) */ domain.delx_eta + domElems;
+   domain.p_old  = AllocateReal(domElems);
+   domain.p_new = AllocateReal(domElems);
+   domain.pHalfStep = AllocateReal(domElems);
+   domain.q_new = AllocateReal(domElems);
+   domain.e_new = AllocateReal(domElems);
+   domain.bvc   = AllocateReal(domElems);
+   domain.pbvc  = AllocateReal(domElems);
+   domain.work  = AllocateReal(domElems);
 
-   domain.vnew = AllocateReal(domElems);
+   domain.compression = AllocateReal(domElems);
+   domain.compHalfStep = AllocateReal(domElems);
 
    /* Basic Field Initialization */
 
@@ -2892,6 +2826,46 @@ int main(int argc, char *argv[])
              (Real_t)(domain.time), (Real_t)(domain.deltatime) );
 #endif
    }
+
+   Release((void **) &domain.compHalfStep);
+   Release((void **) &domain.compression);
+
+   Release((void **) &domain.work);
+   Release((void **) &domain.pbvc);
+   Release((void **) &domain.bvc);
+   Release((void **) &domain.e_new);
+   Release((void **) &domain.q_new);
+   Release((void **) &domain.pHalfStep);
+   Release((void **) &domain.p_new);
+   Release((void **) &domain.p_old);
+
+   Release((void **) &domain.vnewc);
+   Release((void **) &domain.vnew);
+   Release((void **) &domain.determ);
+
+   Release((void **) &domain.z8n);
+   Release((void **) &domain.y8n);
+   Release((void **) &domain.x8n);
+
+   Release((void **) &domain.dvdz);
+   Release((void **) &domain.dvdy);
+   Release((void **) &domain.dvdx);
+
+   Release((void **) &domain.sigzz);
+   Release((void **) &domain.sigyy);
+   Release((void **) &domain.sigxx);
+
+   Release((void **) &domain.delx_zeta);
+   Release((void **) &domain.delx_eta);
+   Release((void **) &domain.delx_xi);
+
+   Release((void **) &domain.delv_zeta);
+   Release((void **) &domain.delv_eta);
+   Release((void **) &domain.delv_xi);
+
+   Release((void **) &domain.dzz);
+   Release((void **) &domain.dyy);
+   Release((void **) &domain.dxx);
 
    Release((void **) &domain.symmZ);
    Release((void **) &domain.symmY);
