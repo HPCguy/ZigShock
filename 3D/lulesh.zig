@@ -82,7 +82,7 @@ const LULESH_SHOW_PROGRESS : bool = true;
 // and/or vectorization.
 
 const Real_t = f32;
-const Index_t = usize;
+const Index_t = u32;
 
 fn IndexToReal(idx: Index_t) Real_t
 {
@@ -337,7 +337,7 @@ fn InitStressTermsForElems(p: [*]const Real_t, q: [*]const Real_t,
    }
 }
 
-fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8] Real_t,
+fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
                                     B: [][8]Real_t) Real_t
 {
    @setFloatMode(.optimized);
@@ -1114,8 +1114,9 @@ fn CalcForceForNodes(domain: *Domain) void
 }
 
 fn CalcAccelerationForNodes(xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
-                            fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
-                            nodalMass: [*]Real_t, numNode: Index_t) void
+                            fx: [*]const Real_t, fy: [*]const Real_t,
+                            fz: [*]const Real_t, nodalMass: [*]const Real_t,
+                            numNode: Index_t) void
 {
    var k: Index_t = 0;
    while ( k < numNode ) : ( k += 1 ) {
@@ -1127,9 +1128,9 @@ fn CalcAccelerationForNodes(xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
 
 fn ApplyAccelerationBoundaryConditionsForNodes(xdd: [*]Real_t, ydd: [*]Real_t,
                                                zdd: [*]Real_t,
-                                               symmX: [*]Index_t,
-                                               symmY: [*]Index_t,
-                                               symmZ: [*]Index_t,
+                                               symmX: [*]const Index_t,
+                                               symmY: [*]const Index_t,
+                                               symmZ: [*]const Index_t,
                                                size: Index_t) void
 {
   const numNodeBC = (size+1)*(size+1);
@@ -1142,10 +1143,10 @@ fn ApplyAccelerationBoundaryConditionsForNodes(xdd: [*]Real_t, ydd: [*]Real_t,
   }
 }
 
-fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
-                        xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
-                        dt: Real_t, u_cut: Real_t, numNode: Index_t)
-                        void
+fn CalcVelocityForNodes(xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
+                        xdd: [*]const Real_t, ydd: [*]const Real_t,
+                        zdd: [*]const Real_t, dt: Real_t, u_cut: Real_t,
+                        numNode: Index_t) void
 {
   @setFloatMode(.optimized);
   var idx: Index_t = 0;
@@ -1163,8 +1164,9 @@ fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
 }
 
 fn CalcPositionForNodes(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                        xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
-                        dt: Real_t, numNode: Index_t) void
+                        xd: [*]const Real_t, yd: [*]const Real_t,
+                        zd: [*]const Real_t, dt: Real_t,
+                        numNode: Index_t) void
 {
    @setFloatMode(.optimized);
    var k: Index_t = 0;
@@ -1379,9 +1381,8 @@ fn CalcElemCharacteristicLength(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
 }
 
 fn CalcElemVelocityGradient(xvel: [8]Real_t, yvel: [8]Real_t,
-                            zvel: [8]Real_t,
-                            b: [3][8]Real_t, detJ: Real_t, d: []Real_t)
-                            void
+                            zvel: [8]Real_t, b: [3][8]Real_t,
+                            detJ: Real_t, d: []Real_t) void
 {
    @setFloatMode(.optimized);
    const inv_detJ = ONE / detJ;
@@ -1462,10 +1463,11 @@ fn UpdatePos(deltaTime: Real_t,
 }
 
 fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
-                          x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                          xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
+                          x: [*]const Real_t, y: [*]const Real_t,
+                          z: [*]const Real_t, xd: [*]const Real_t,
+                          yd: [*]const Real_t, zd: [*]const Real_t,
                           dxx: [*]Real_t, dyy: [*]Real_t, dzz: [*]Real_t,
-                          v: [*]Real_t, volo: [*]Real_t,
+                          v: [*]const Real_t, volo: [*]const Real_t,
                           vnew: [*]Real_t, delv: [*]Real_t, arealg: [*]Real_t,
                           deltaTime: Real_t, numElem: Index_t) void
 {
@@ -1568,16 +1570,17 @@ fn CalcLagrangeElements(domain: *Domain) void
    }
 }
 
-fn CalcMonotonicQGradientsForElems(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                                   xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
-                                   volo: [*]Real_t, vnew: [*]Real_t,
+fn CalcMonotonicQGradientsForElems(x: [*]const Real_t, y: [*]const Real_t,
+                                   z: [*]const Real_t, xd: [*]const Real_t,
+                                   yd: [*]const Real_t, zd: [*]const Real_t,
+                                   volo: [*]const Real_t,vnew: [*]const Real_t,
                                    delv_xi: [*]Real_t,
                                    delv_eta: [*]Real_t,
                                    delv_zeta: [*]Real_t,
                                    delx_xi: [*]Real_t,
                                    delx_eta: [*]Real_t,
                                    delx_zeta: [*]Real_t,
-                                   nodelist: [*][8]Index_t,
+                                   nodelist: [*]const [8]Index_t,
                                    numElem: Index_t) void
 {
    @setFloatMode(.optimized);
@@ -1714,20 +1717,20 @@ fn CalcMonotonicQGradientsForElems(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
    }
 }
 
-fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
-                                lxim: [*]Index_t, lxip: [*]Index_t,
-                                letam: [*]Index_t, letap: [*]Index_t,
-                                lzetam: [*]Index_t, lzetap: [*]Index_t,
-                                delv_xi: [*]Real_t, delv_eta: [*]Real_t,
-                                delv_zeta: [*]Real_t, delx_xi: [*]Real_t,
-                                delx_eta: [*]Real_t, delx_zeta: [*]Real_t,
-                                vdov: [*]Real_t, volo: [*]Real_t,
-                                vnew: [*]Real_t, elemMass: [*]Real_t,
-                                qq: [*]Real_t, ql: [*]Real_t,
-                                qlc_monoq: Real_t, qqc_monoq: Real_t,
-                                monoq_limiter_mult: Real_t,
-                                monoq_max_slope: Real_t,
-                                ptiny: Real_t, numElem: Index_t) void
+fn CalcMonotonicQRegionForElems(elemBC: [*]const u32,
+                          lxim: [*]const Index_t, lxip: [*]const Index_t,
+                          letam: [*]const Index_t, letap: [*]const Index_t,
+                          lzetam: [*]const Index_t, lzetap: [*]const Index_t,
+                          delv_xi: [*]const Real_t, delv_eta: [*]const Real_t,
+                          delv_zeta: [*]const Real_t, delx_xi: [*]const Real_t,
+                          delx_eta: [*]const Real_t,delx_zeta: [*]const Real_t,
+                          vdov: [*]const Real_t, volo: [*]const Real_t,
+                          vnew: [*]const Real_t, elemMass: [*]const Real_t,
+                          qq: [*]Real_t, ql: [*]Real_t,
+                          qlc_monoq: Real_t, qqc_monoq: Real_t,
+                          monoq_limiter_mult: Real_t,
+                          monoq_max_slope: Real_t,
+                          ptiny: Real_t, numElem: Index_t) void
 {
    @setFloatMode(.optimized);
    var idx: Index_t = 0;
@@ -1886,7 +1889,7 @@ fn CalcMonotonicQForElems(domain: *Domain) void
    }
 }
 
-fn Qerr(q: [*]Real_t, numElem: Index_t, qstop:Real_t) Index_t
+fn Qerr(q: [*]const Real_t, numElem: Index_t, qstop:Real_t) Index_t
 {
   var idx: Index_t = math.maxInt(Index_t);
   var k: Index_t = 0;
@@ -1932,8 +1935,8 @@ fn CalcQForElems(domain: *Domain) void
 
 
 fn CalcPressureForElems(p_new: [*]Real_t, bvc: [*]Real_t,
-                        pbvc: [*]Real_t, e_old: [*]Real_t,
-                        compression: [*]Real_t, vnewc: [*]Real_t,
+                        pbvc: [*]Real_t, e_old: [*]const Real_t,
+                        compression: [*]const Real_t, vnewc: [*]const Real_t,
                         pmin: Real_t, p_cut: Real_t, eosvmax: Real_t,
                         length:Index_t) void
 {
@@ -1963,12 +1966,13 @@ fn CalcPressureForElems(p_new: [*]Real_t, bvc: [*]Real_t,
 
 fn CalcEnergyForElems(p_new: [*]Real_t, e_new: [*]Real_t, q_new: [*]Real_t,
                       bvc: [*]Real_t, pbvc: [*]Real_t,
-                      p_old: [*]Real_t, e_old: [*]Real_t, q_old: [*]Real_t,
-                      compression: [*]Real_t, compHalfStep: [*]Real_t,
-                      vnewc: [*]Real_t, work: [*]Real_t, delvc: [*]Real_t,
+                      p_old: [*]const Real_t, e_old: [*]const Real_t,
+                      q_old: [*]const Real_t, compression: [*]const Real_t,
+                      compHalfStep: [*]const Real_t, vnewc: [*]const Real_t,
+                      work: [*]const Real_t, delvc: [*]const Real_t,
                       pmin: Real_t, p_cut: Real_t,  e_cut: Real_t,
-                      q_cut: Real_t, emin: Real_t, qq_old: [*]Real_t,
-                      ql_old: [*]Real_t, rho0: Real_t, eosvmax: Real_t,
+                      q_cut: Real_t, emin: Real_t, qq_old: [*]const Real_t,
+                      ql_old: [*]const Real_t, rho0: Real_t, eosvmax: Real_t,
                       pHalfStep: [*]Real_t, length: Index_t) void
 {
    @setFloatMode(.optimized);
@@ -2086,9 +2090,9 @@ fn CalcEnergyForElems(p_new: [*]Real_t, e_new: [*]Real_t, q_new: [*]Real_t,
 }
 
 fn CalcSoundSpeedForElems(length: Index_t, ss: [*]Real_t,
-                          vnewc: [*]Real_t, rho0: Real_t, enewc: [*]Real_t,
-                          pnewc: [*]Real_t, pbvc: [*]Real_t,
-                          bvc: [*]Real_t) void
+                          vnewc: [*]const Real_t, rho0: Real_t,
+                          enewc: [*]const Real_t, pnewc: [*]const Real_t,
+                          pbvc: [*]const Real_t, bvc: [*]const Real_t) void
 {
    @setFloatMode(.optimized);
    var idx: Index_t = 0;
@@ -2105,7 +2109,7 @@ fn CalcSoundSpeedForElems(length: Index_t, ss: [*]Real_t,
    }
 }
 
-fn EvalCopy(p_old: [*]Real_t, p: [*]Real_t, numElem: Index_t) void
+fn EvalCopy(p_old: [*]Real_t, p: [*]const Real_t, numElem: Index_t) void
 {
   var idx: Index_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
@@ -2114,7 +2118,8 @@ fn EvalCopy(p_old: [*]Real_t, p: [*]Real_t, numElem: Index_t) void
 }
 
 fn EvalCompression(compression: [*]Real_t, compHalfStep: [*]Real_t,
-                   numElem: Index_t, vnewc: [*]Real_t, delvc: [*]Real_t) void
+                   vnewc: [*]const Real_t, delvc: [*]const Real_t,
+                   numElem: Index_t) void
 {
   @setFloatMode(.optimized);
   var idx: Index_t = 0;
@@ -2125,8 +2130,8 @@ fn EvalCompression(compression: [*]Real_t, compHalfStep: [*]Real_t,
   }
 }
 
-fn EvalEosVmin(vnewc: [*]Real_t, compHalfStep: [*]Real_t,
-               compression: [*]Real_t,
+fn EvalEosVmin(vnewc: [*]const Real_t, compHalfStep: [*]Real_t,
+               compression: [*]const Real_t,
                numElem: Index_t, eosvmin: Real_t) void
 {
   var idx: Index_t = 0;
@@ -2137,7 +2142,7 @@ fn EvalEosVmin(vnewc: [*]Real_t, compHalfStep: [*]Real_t,
   }
 }
 
-fn EvalEosVmax(vnewc: [*]Real_t, p_old: [*]Real_t,
+fn EvalEosVmax(vnewc: [*]const Real_t, p_old: [*]Real_t,
                compHalfStep: [*]Real_t, compression: [*]Real_t,
                numElem: Index_t, eosvmax: Real_t) void
 {
@@ -2159,8 +2164,9 @@ fn EvalEosResetWork(work: [*]Real_t, numElem: Index_t) void
   }
 }
 
-fn UpdatePE(p: [*]Real_t, p_new: [*]Real_t, e: [*]Real_t, e_new: [*]Real_t,
-            q: [*]Real_t, q_new: [*]Real_t, numElem: Index_t) void
+fn UpdatePE(p: [*]Real_t, p_new: [*]const Real_t,
+            e: [*]Real_t, e_new: [*]const Real_t,
+            q: [*]Real_t, q_new: [*]const Real_t, numElem: Index_t) void
 {
   var idx: Index_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
@@ -2170,7 +2176,8 @@ fn UpdatePE(p: [*]Real_t, p_new: [*]Real_t, e: [*]Real_t, e_new: [*]Real_t,
   }
 }
 
-fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
+fn EvalEOSForElems(domain: *Domain, vnewc: [*]const Real_t,
+                   numElem: Index_t) void
 {
    const  e_cut = domain.e_cut;
    const  p_cut = domain.p_cut;
@@ -2196,7 +2203,7 @@ fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
 
    EvalCopy(p_old, domain.p, numElem);
 
-   EvalCompression(compression, compHalfStep, numElem, vnewc, delvc);
+   EvalCompression(compression, compHalfStep, vnewc, delvc, numElem);
 
    // Check for v > eosvmax or v < eosvmin
    if ( eosvmin != ZERO ) {
@@ -2223,8 +2230,8 @@ fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
              vnewc, rho0, e_new, p_new, pbvc, bvc);
 }
 
-fn VolErr3(vnewc: [*]Real_t, vnew: [*]Real_t, v: [*]Real_t, numElem: Index_t,
-           eosvmin: Real_t, eosvmax: Real_t) bool
+fn VolErr3(vnewc: [*]Real_t, vnew: [*]const Real_t, v: [*]const Real_t,
+           numElem: Index_t, eosvmin: Real_t, eosvmax: Real_t) bool
 {
   var idx: Index_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
@@ -2285,7 +2292,7 @@ fn ApplyMaterialPropertiesForElems(domain: *Domain) void
   }
 }
 
-fn UpdateVolumesForElems(vnew: [*]Real_t, v: [*]Real_t,
+fn UpdateVolumesForElems(vnew: [*]const Real_t, v: [*]Real_t,
                          v_cut: Real_t, length: Index_t) void
 {
    if (length != 0) {
@@ -2316,8 +2323,8 @@ fn LagrangeElements(domain: *Domain, numElem: Index_t) void
                         domain.v_cut, numElem);
 }
 
-fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
-                                 vdov: [*]Real_t, arealg: [*]Real_t,
+fn CalcCourantConstraintForElems(length: Index_t, ss: [*]const Real_t,
+                                 vdov: [*]const Real_t, arealg: [*]const Real_t,
                                  qqc: Real_t, dtcourant: *Real_t) void
 {
    @setFloatMode(.optimized);
@@ -2363,7 +2370,7 @@ fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
    return;
 }
 
-fn CalcHydroConstraintForElems(length: Index_t, vdov: [*]Real_t,
+fn CalcHydroConstraintForElems(length: Index_t, vdov: [*]const Real_t,
                                dvovmax: Real_t, dthydro: *Real_t) void
 {
    const psmall: Real_t = 1.0e-20;
