@@ -32,8 +32,12 @@ fn IndexToReal(idx: Index_t) Real_t
    return @floatFromInt(idx);
 }
 
-const gammaa       = 1.41421356237;
-const gammaInverse = 0.707106781187;
+const gammaa:       Real_t = 1.41421356237;
+const gammaInverse: Real_t = 0.707106781187;
+
+const ZERO:         Real_t = 0.0;
+const HALF:         Real_t = 0.5;
+const ONE:          Real_t = 1.0;
 
 //*************************************************************************
 // Subroutine:  CreateShockTubeMesh
@@ -63,9 +67,9 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: []Real_t,
 {
    const midTube = numElem / 2;
 
-   var massInitial: Real_t     = 1.0;
+   var massInitial: Real_t     = ONE;
    var pressureInitial: Real_t = gammaInverse;
-   var energyInitial: Real_t   = pressureInitial/(gammaa-1.0);
+   var energyInitial: Real_t   = pressureInitial/(gammaa-ONE);
 
    var idx: Index_t = 0;
    while ( idx < midTube ) : ( idx += 1 ) {
@@ -74,12 +78,12 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: []Real_t,
       energy[idx]   = energyInitial;
    }
 
-   const pressureRatio = 0.4;
-   const densityRatio = 0.7;
+   const pressureRatio: Real_t = 0.4;
+   const densityRatio:  Real_t = 0.7;
 
    massInitial     = massInitial * densityRatio;
    pressureInitial = pressureInitial * pressureRatio;
-   energyInitial   = pressureInitial/(gammaa - 1.0);
+   energyInitial   = pressureInitial/(gammaa - ONE);
 
    idx = midTube;
    while ( idx < numElem ) : ( idx += 1 ) {
@@ -90,7 +94,7 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: []Real_t,
 
    idx = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
-      momentum[idx] = 0.0;
+      momentum[idx] = ZERO;
    }
 }
 
@@ -119,12 +123,12 @@ fn ComputeFaceInfo(numFace: Index_t,
       const downWind = idx + 1; // downwind element
 
       // calculate face centered quantities
-      var massf: Real_t =     0.5 * (mass[upWind]     + mass[downWind]);
-      var momentumf: Real_t = 0.5 * (momentum[upWind] + momentum[downWind]);
-      var energyf: Real_t =   0.5 * (energy[upWind]   + energy[downWind]);
-      var pressuref: Real_t = (gammaa - 1.0) *
-                      (energyf - 0.5*momentumf*momentumf/massf);
-      const c = math.sqrt(gammaa*pressuref/massf);
+      var massf: Real_t =     HALF * (mass[upWind]     + mass[downWind]);
+      var momentumf: Real_t = HALF * (momentum[upWind] + momentum[downWind]);
+      var energyf: Real_t =   HALF * (energy[upWind]   + energy[downWind]);
+      var pressuref: Real_t = (gammaa - ONE) *
+                      (energyf - HALF*momentumf*momentumf/massf);
+      const c: Real_t = math.sqrt(gammaa*pressuref/massf);
       const v = momentumf/massf;
 
       // Now that we have the wave speeds, we might want to
@@ -134,36 +138,36 @@ fn ComputeFaceInfo(numFace: Index_t,
 
       // OK, calculate face quantities
 
-      const contributor = if (v >= 0.0) upWind else downWind;
+      const contributor = if (v >= ZERO) upWind else downWind;
       massf = mass[contributor];
       momentumf = momentum[contributor];
       energyf = energy[contributor];
-      pressuref = energyf - 0.5*momentumf*momentumf/massf;
-      const ev = v*(gammaa - 1.0);
+      pressuref = energyf - HALF*momentumf*momentumf/massf;
+      const ev = v*(gammaa - ONE);
 
       f0[idx] = ev*massf;
       f1[idx] = ev*momentumf;
       f2[idx] = ev*(energyf - pressuref);
 
-      const contributorp = if (v + c >= 0.0) upWind else downWind;
+      const contributorp = if (v + c >= ZERO) upWind else downWind;
       massf = mass[contributorp];
       momentumf = momentum[contributorp];
       energyf = energy[contributorp];
-      pressuref = (gammaa - 1.0)*(energyf - 0.5*momentumf*momentumf/massf);
-      const evp = 0.5*(v + c);
-      const cLocalp = math.sqrt(gammaa*pressuref/massf);
+      pressuref = (gammaa - ONE)*(energyf - HALF*momentumf*momentumf/massf);
+      const evp = HALF*(v + c);
+      const cLocalp: Real_t = math.sqrt(gammaa*pressuref/massf);
 
       f0[idx] += evp*massf;
       f1[idx] += evp*(momentumf + massf*cLocalp);
       f2[idx] += evp*(energyf + pressuref + momentumf*cLocalp);
 
-      const contributorm = if (v - c >= 0.0) upWind else downWind;
+      const contributorm = if (v - c >= ZERO) upWind else downWind;
       massf = mass[contributorm];
       momentumf = momentum[contributorm];
       energyf = energy[contributorm];
-      pressuref = (gammaa - 1.0)*(energyf - 0.5*momentumf*momentumf/massf);
-      const evm = 0.5*(v - c);
-      const cLocalm = math.sqrt(gammaa*pressuref/massf);
+      pressuref = (gammaa - ONE)*(energyf - HALF*momentumf*momentumf/massf);
+      const evm = HALF*(v - c);
+      const cLocalm: Real_t = math.sqrt(gammaa*pressuref/massf);
 
       f0[idx] += evm*massf;
       f1[idx] += evm*(momentumf - massf*cLocalm);
@@ -194,9 +198,9 @@ fn UpdateElemInfo(numElem: Index_t,
       mass[idx]     -= gammaInverse*(f0[downWind] - f0[upWind])*dtdx;
       momentum[idx] -= gammaInverse*(f1[downWind] - f1[upWind])*dtdx;
       energy[idx]   -= gammaInverse*(f2[downWind] - f2[upWind])*dtdx;
-      pressure[idx]  = (gammaa - 1.0) *
+      pressure[idx]  = (gammaa - ONE) *
                        ( energy[idx]
-                       - 0.5*momentum[idx]*momentum[idx]/mass[idx]);
+                       - HALF*momentum[idx]*momentum[idx]/mass[idx]);
    }
 }
 
@@ -211,7 +215,7 @@ fn DumpField(tag: []const u8, numElem: Index_t, field: []const Real_t) !void
    try stdout.print("{s}\n", .{ tag });
    var idx: Index_t = 0;
    while( idx < numElem ) : ( idx += 1 ) {
-      try stdout.print("{d}.0 {any}\n", .{ idx, field[idx] });
+      try stdout.print("{d}.0 {e:9.6}\n", .{ idx, field[idx] });
    }
    try stdout.print("\n\n", .{});
 }
@@ -260,9 +264,10 @@ pub fn main() !void
 
    InitializeShockTubeMesh(numElems+1, &mass, &momentum, &energy, &pressure);
 
-   var time: Real_t = 0.0;
-   const dx = 1.0 / IndexToReal( numElems );
-   const dt = 0.4 * dx;
+   var time: Real_t = ZERO;
+   const dx: Real_t = ONE / IndexToReal( numElems );
+   const safetyFactor: Real_t = 0.4;
+   const dt: Real_t = safetyFactor * dx;
 
    var currCycle: u32 = 0;
    while ( currCycle < numTotalCycles ) : ( currCycle += 1 ) {
