@@ -8,7 +8,7 @@ To try the 1D:
 % gnuplot
 gnuplot> plot "ultra"
 gnuplot> exit
-%```
+%
 ```
 
 These are perfect test cases to resolve the following Zig issue, since all numerics are centralized to a few lines.
