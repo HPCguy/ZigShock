@@ -72,7 +72,6 @@ typedef short Index_t; // array indexing type
 typedef short Int_t;
 
 #define CBRT cbrtf
-#define FMAX fmaxf
 #define SQRT sqrtf
 
 #define ZERO        0.0f
@@ -82,6 +81,7 @@ typedef short Int_t;
 #define QUARTER     0.25f
 #define HALF        0.5f
 #define ONE         1.0f
+#define FIVEFOURTH  1.125f
 #define TWO         2.0f
 #define THREE       3.0f
 #define FOUR        4.0f
@@ -90,7 +90,6 @@ typedef short Int_t;
 #define EIGHT       8.0f
 #define TWELVE     12.0f
 #define SIXTYFOUR  64.0f
-
 
 #define LULESH_SHOW_PROGRESS 1
 
@@ -305,7 +304,6 @@ void Release(void **ptr)
 #define ZETA_P_SYMM 0x400
 #define ZETA_P_FREE 0x800
 
-
 void TimeIncrement(Domain *domain)
 {
    Real_t targetdt = domain->stoptime - domain->time;
@@ -369,8 +367,8 @@ void InitStressTermsForElems(Real_t *p, Real_t *q,
    }
 }
 
-void CalcElemShapeFunctionDerivatives( Real_t *x, Real_t *y, Real_t *z,
-                                       Real_t b[][8], Real_t *volume)
+Real_t CalcElemShapeFunctionDerivatives(Real_t *x, Real_t *y, Real_t *z,
+                                        Real_t b[][8])
 {
    Real_t fjxxi, fjxet, fjxze;
    Real_t fjyxi, fjyet, fjyze;
@@ -446,31 +444,19 @@ void CalcElemShapeFunctionDerivatives( Real_t *x, Real_t *y, Real_t *z,
    b[0][7] = - (b[0][1] =      cjxxi  -  cjxet  -  cjxze);
    b[0][4] = - (b[0][2] =      cjxxi  +  cjxet  -  cjxze);
    b[0][5] = - (b[0][3] =   -  cjxxi  +  cjxet  -  cjxze);
-   // b[0][4] = -b[0][2];
-   // b[0][5] = -b[0][3];
-   // b[0][6] = -b[0][0];
-   // b[0][7] = -b[0][1];
 
    b[1][6] = - (b[1][0] =   -  cjyxi  -  cjyet  -  cjyze);
    b[1][7] = - (b[1][1] =      cjyxi  -  cjyet  -  cjyze);
    b[1][4] = - (b[1][2] =      cjyxi  +  cjyet  -  cjyze);
    b[1][5] = - (b[1][3] =   -  cjyxi  +  cjyet  -  cjyze);
-   // b[1][4] = -b[1][2];
-   // b[1][5] = -b[1][3];
-   // b[1][6] = -b[1][0];
-   // b[1][7] = -b[1][1];
 
    b[2][6] = - (b[2][0] =   -  cjzxi  -  cjzet  -  cjzze);
    b[2][7] = - (b[2][1] =      cjzxi  -  cjzet  -  cjzze);
    b[2][4] = - (b[2][2] =      cjzxi  +  cjzet  -  cjzze);
    b[2][5] = - (b[2][3] =   -  cjzxi  +  cjzet  -  cjzze);
-   // b[2][4] = -b[2][2];
-   // b[2][5] = -b[2][3];
-   // b[2][6] = -b[2][0];
-   // b[2][7] = -b[2][1];
 
    /* calculate jacobian determinant (volume) */
-   *volume = EIGHT * ( fjxet * cjxet + fjyet * cjyet + fjzet * cjzet);
+   return EIGHT * ( fjxet * cjxet + fjyet * cjyet + fjzet * cjzet);
 }
 
 inline void SumElemFaceNormal(
@@ -512,8 +498,7 @@ inline void SumElemFaceNormal(
 void CalcElemNodeNormals(Real_t *pfx, Real_t *pfy, Real_t *pfz,
                          Real_t *x, Real_t *y, Real_t *z)
 {
-   Iter_t i;
-   for (i = 0 ; i < 8 ; ++i ) {
+   for (Iter_t i = 0 ; i < 8 ; ++i ) {
       pfx[i] = ZERO;
       pfy[i] = ZERO;
       pfz[i] = ZERO;
@@ -656,8 +641,8 @@ void IntegrateStressForElems(Index_t *nodelist,
       GatherNodes(elemNodes, x, y, z, x_local, y_local, z_local);
 
       /* Volume calculation involves extra work for numerical consistency. */
-      CalcElemShapeFunctionDerivatives(x_local, y_local, z_local,
-                                       B, &determ[k]);
+      determ[k] = 
+         CalcElemShapeFunctionDerivatives(x_local, y_local, z_local, B);
 
       CalcElemNodeNormals( B[0] , B[1], B[2],
                            x_local, y_local, z_local );
@@ -719,8 +704,6 @@ void CollectDomainNodesToElemNodes(Real_t *x, Real_t *y, Real_t *z,
 
 }
 
-#define twelfth (ONE / TWELVE)
-
 inline void VoluDer(Real_t x0,  Real_t x1,  Real_t x2,
              Real_t x3,  Real_t x4,  Real_t x5,
              Real_t y0,  Real_t y1,  Real_t y2,
@@ -729,7 +712,7 @@ inline void VoluDer(Real_t x0,  Real_t x1,  Real_t x2,
              Real_t z3,  Real_t z4,  Real_t z5,
              Real_t *dvdx, Real_t *dvdy, Real_t *dvdz)
 {
-    // Real_t twelfth = ONE / TWELVE;
+   Real_t twelfth = ONE / TWELVE;
 
    *dvdx =
      ((y1 + y2) * (z0 + z1) - (y0 + y1) * (z1 + z2) +
@@ -744,13 +727,6 @@ inline void VoluDer(Real_t x0,  Real_t x1,  Real_t x2,
      (- (y1 + y2) * (x0 + x1) + (y0 + y1) * (x1 + x2) -
       (y0 + y4) * (x3 + x4) + (y3 + y4) * (x0 + x4) +
       (y2 + y5) * (x3 + x5) - (y3 + y5) * (x2 + x5)) * twelfth;
-
-/*
-   *dvdx *= twelfth;
-   *dvdy *= twelfth;
-   *dvdz *= twelfth;
-*/
-
 }
 
 void CalcElemVolumeDerivative(Real_t *dvdx, Real_t *dvdy, Real_t *dvdz,
@@ -1254,7 +1230,7 @@ void CalcPositionForNodes(Real_t *x,  Real_t *y,  Real_t *z,
 
 void LagrangeNodal(Domain *domain)
 {
-   Real_t delt = domain->deltatime;
+  Real_t  delt = domain->deltatime;
   Real_t u_cut = domain->u_cut;
 
   /* time of boundary condition evaluation is beginning of step for force and
@@ -1287,26 +1263,24 @@ void LagrangeNodal(Domain *domain)
   return;
 }
 
-inline void TRIPLE_PRODUCT(Real_t x1_, Real_t y1_, Real_t z1_,
+inline Real_t TRIPLE_PRODUCT(Real_t x1_, Real_t y1_, Real_t z1_,
                      Real_t x2_, Real_t y2_, Real_t z2_,
-                     Real_t x3_, Real_t y3_, Real_t z3_, Real_t *pv_)
+                     Real_t x3_, Real_t y3_, Real_t z3_)
 {
-   *pv_ += (x1_*(y2_*z3_ - z2_*y3_) +
-            x2_*(z1_*y3_ - y1_*z3_) +
-            x3_*(y1_*z2_ - z1_*y2_));
+   return (x1_*(y2_*z3_ - z2_*y3_) +
+           x2_*(z1_*y3_ - y1_*z3_) +
+           x3_*(y1_*z2_ - z1_*y2_));
 }
 
 
-inline void CalcElemVolume2(Real_t x0, Real_t x1, Real_t x2,  Real_t x3,
+inline Real_t CalcElemVolume2(Real_t x0, Real_t x1, Real_t x2,  Real_t x3,
                      Real_t x4,  Real_t x5, Real_t x6,  Real_t x7,
                      Real_t y0,  Real_t y1, Real_t y2,  Real_t y3,
                      Real_t y4,  Real_t y5, Real_t y6,  Real_t y7,
                      Real_t z0,  Real_t z1, Real_t z2,  Real_t z3,
-                     Real_t z4,  Real_t z5, Real_t z6,  Real_t z7, Real_t *fv)
+                     Real_t z4,  Real_t z5, Real_t z6,  Real_t z7)
 {
-  // Real_t twelfth = ONE / TWELVE
-
-  *fv = ZERO;
+  Real_t fv;
   {
      Real_t dx31 = x3 - x1;
      Real_t dy31 = y3 - y1;
@@ -1328,9 +1302,9 @@ inline void CalcElemVolume2(Real_t x0, Real_t x1, Real_t x2,  Real_t x3,
      Real_t dy20 = y2 - y0;
      Real_t dz20 = z2 - z0;
 
-     TRIPLE_PRODUCT(s1, dx63, dx20,
-                    s2, dy63, dy20,
-                    s3, dz63, dz20, fv);
+     fv = TRIPLE_PRODUCT(s1, dx63, dx20,
+                         s2, dy63, dy20,
+                         s3, dz63, dz20);
   }
   {
      Real_t dx43 = x4 - x3;
@@ -1353,9 +1327,9 @@ inline void CalcElemVolume2(Real_t x0, Real_t x1, Real_t x2,  Real_t x3,
      Real_t dy70 = y7 - y0;
      Real_t dz70 = z7 - z0;
 
-     TRIPLE_PRODUCT(s1, dx64, dx70,
-                    s2, dy64, dy70,
-                    s3, dz64, dz70, fv);
+     fv += TRIPLE_PRODUCT(s1, dx64, dx70,
+                          s2, dy64, dy70,
+                          s3, dz64, dz70);
   }
   {
      Real_t dx14 = x1 - x4;
@@ -1378,30 +1352,25 @@ inline void CalcElemVolume2(Real_t x0, Real_t x1, Real_t x2,  Real_t x3,
      Real_t dy50 = y5 - y0;
      Real_t dz50 = z5 - z0;
 
-     TRIPLE_PRODUCT(s1, dx61, dx50,
-                    s2, dy61, dy50,
-                    s3, dz61, dz50, fv);
+     fv += TRIPLE_PRODUCT(s1, dx61, dx50,
+                          s2, dy61, dy50,
+                          s3, dz61, dz50);
    }
 
-  // volume *= twelfth;
-
-  // return volume * twelfth;
-
-  *fv *= twelfth;
+  return (fv / TWELVE);
 }
 
 Real_t CalcElemVolume(Real_t *x, Real_t *y, Real_t *z)
 {
-   Real_t fv;
+   return
    CalcElemVolume2( x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7],
                     y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7],
-                    z[0], z[1], z[2], z[3], z[4], z[5], z[6], z[7], &fv);
-   return fv;
+                    z[0], z[1], z[2], z[3], z[4], z[5], z[6], z[7]);
 }
 
-inline void AreaFace(Real_t x0, Real_t x1, Real_t x2, Real_t x3,
+inline Real_t AreaFace(Real_t x0, Real_t x1, Real_t x2, Real_t x3,
                Real_t y0, Real_t y1, Real_t y2, Real_t y3,
-               Real_t z0, Real_t z1, Real_t z2, Real_t z3, Real_t *area)
+               Real_t z0, Real_t z1, Real_t z2, Real_t z3)
 {
    Real_t dx1 = (x2 - x0);
    Real_t dx2 = (x3 - x1);
@@ -1424,49 +1393,46 @@ inline void AreaFace(Real_t x0, Real_t x1, Real_t x2, Real_t x3,
    Real_t term3 = fx * gx;
    term3 +=  fy * gy;
    term3 +=  fz * gz;
-   Real_t term4 = term1 * term2 - term3 * term3;
-   *area = term4;
+   return term1 * term2 - term3 * term3;
 }
 
 Real_t CalcElemCharacteristicLength(Real_t x[8], Real_t y[8], Real_t z[8],
                                    Real_t volume)
 {
-   Real_t a;
    Real_t charLength = ZERO;
 
-   AreaFace(x[0],x[1],x[2],x[3],
-            y[0],y[1],y[2],y[3],
-            z[0],z[1],z[2],z[3], &a);
+   Real_t a =
+       AreaFace(x[0],x[1],x[2],x[3],
+                y[0],y[1],y[2],y[3],
+                z[0],z[1],z[2],z[3]);
    if (a > charLength) charLength = a;
 
-   AreaFace(x[4],x[5],x[6],x[7],
-            y[4],y[5],y[6],y[7],
-            z[4],z[5],z[6],z[7], &a);
+   a = AreaFace(x[4],x[5],x[6],x[7],
+                y[4],y[5],y[6],y[7],
+                z[4],z[5],z[6],z[7]);
    if (a > charLength) charLength = a;
 
-   AreaFace(x[0],x[1],x[5],x[4],
-            y[0],y[1],y[5],y[4],
-            z[0],z[1],z[5],z[4], &a);
+   a = AreaFace(x[0],x[1],x[5],x[4],
+                y[0],y[1],y[5],y[4],
+                z[0],z[1],z[5],z[4]);
    if (a > charLength) charLength = a;
 
-   AreaFace(x[1],x[2],x[6],x[5],
-            y[1],y[2],y[6],y[5],
-            z[1],z[2],z[6],z[5], &a);
+   a = AreaFace(x[1],x[2],x[6],x[5],
+                y[1],y[2],y[6],y[5],
+                z[1],z[2],z[6],z[5]);
    if (a > charLength) charLength = a;
 
-   AreaFace(x[2],x[3],x[7],x[6],
-            y[2],y[3],y[7],y[6],
-            z[2],z[3],z[7],z[6], &a);
+   a = AreaFace(x[2],x[3],x[7],x[6],
+                y[2],y[3],y[7],y[6],
+                z[2],z[3],z[7],z[6]);
    if (a > charLength) charLength = a;
 
-   AreaFace(x[3],x[0],x[4],x[7],
-            y[3],y[0],y[4],y[7],
-            z[3],z[0],z[4],z[7], &a);
+   a = AreaFace(x[3],x[0],x[4],x[7],
+                y[3],y[0],y[4],y[7],
+                z[3],z[0],z[4],z[7]);
    if (a > charLength) charLength = a;
 
-   charLength = (FOUR * volume) / SQRT( charLength );
-
-   return charLength;
+   return (FOUR * volume) / SQRT( charLength );
 }
 
 void CalcElemVelocityGradient(Real_t *xvel, Real_t *yvel, Real_t *zvel,
@@ -1599,8 +1565,7 @@ void CalcKinematicsForElems(Index_t *nodelist,
     UpdatePos(deltaTime, x_local, y_local, z_local,
               xd_local, yd_local, zd_local);
 
-    CalcElemShapeFunctionDerivatives( x_local, y_local, z_local,
-                                      B, &detJ );
+    detJ = CalcElemShapeFunctionDerivatives( x_local, y_local, z_local, B);
 
     CalcElemVelocityGradient( xd_local, yd_local, zd_local,
                                B, detJ, D );
@@ -2021,15 +1986,13 @@ void CalcQForElems(Domain *domain)
    }
 }
 
-#define c1s (TWO / THREE)
-
 inline void CalcPressureForElems(Real_t *p_new, Real_t *bvc,
                           Real_t *pbvc, Real_t *e_old,
                           Real_t *compression, Real_t *vnewc,
                           Real_t pmin, Real_t p_cut, Real_t eosvmax,
                           Iter_t length)
 {
-   // Real_t c1s = TWO / THREE;
+   Real_t c1s = TWO / THREE;
    for (Iter_t i=0 ; i<length; ++i ) {
       bvc[i] = c1s * (compression[i] + ONE );
       pbvc[i] = c1s;
@@ -2044,12 +2007,10 @@ inline void CalcPressureForElems(Real_t *p_new, Real_t *bvc,
       if ( vnewc[i] >= eosvmax ) /* impossible condition here? */
          p_new[i] = ZERO;
 
-      if (p_new[i]       <  pmin)
-         p_new[i]   = pmin;
+      if (p_new[i] < pmin)
+         p_new[i] = pmin;
    }
 }
-
-#define sixth (ONE / SIX)
 
 void CalcEnergyForElems(Real_t *p_new, Real_t *e_new, Real_t *q_new,
                         Real_t *bvc, Real_t *pbvc,
@@ -2061,7 +2022,7 @@ void CalcEnergyForElems(Real_t *p_new, Real_t *e_new, Real_t *q_new,
                         Real_t *ql_old, Real_t rho0, Real_t eosvmax,
                         Real_t *pHalfStep, Iter_t length)
 {
-   // Real_t sixth = ONE / SIX;
+   Real_t sixth = ONE / SIX;
 
    for (Iter_t i=0; i<length; ++i) {
       e_new[i] = e_old[i] - delvc[i]*(p_old[i] + q_old[i]) * HALF +
@@ -2642,7 +2603,7 @@ int main(int argc, char *argv[])
    /* initialize nodal coordinates */
 
    nidx = 0;
-   tz = FMAX(ZERO, ZERO); // FMAX call magically shaves 8 sec off runtime
+   tz = ZERO;
    for (plane=0; plane<edgeNodes; ++plane) {
       ty = ZERO;
       for (row=0; row<edgeNodes; ++row) {
@@ -2653,13 +2614,13 @@ int main(int argc, char *argv[])
             domain.z[nidx] = tz;
             ++nidx;
             // tx += ds; /* may accumulate roundoff... */
-            tx = 1.125f*(Real_t)(col+1)/(Real_t)(edgeElems);
+            tx = FIVEFOURTH*(Real_t)(col+1)/(Real_t)(edgeElems);
          }
          // ty += ds;  /* may accumulate roundoff... */
-         ty = 1.125f*(Real_t)(row+1)/(Real_t)(edgeElems);
+         ty = FIVEFOURTH*(Real_t)(row+1)/(Real_t)(edgeElems);
       }
       // tz += ds;  /* may accumulate roundoff... */
-      tz = 1.125f*(Real_t)(plane+1)/(Real_t)(edgeElems);
+      tz = FIVEFOURTH*(Real_t)(plane+1)/(Real_t)(edgeElems);
    }
 
 
@@ -2826,6 +2787,10 @@ int main(int argc, char *argv[])
              (Real_t)(domain.time), (Real_t)(domain.deltatime) );
 #endif
    }
+#ifndef LULESH_SHOW_PROGRESS
+   printf("time = %e, dt=%e\n",
+          (Real_t)(domain.time), (Real_t)(domain.deltatime) );
+#endif
 
    Release((void **) &domain.compHalfStep);
    Release((void **) &domain.compression);

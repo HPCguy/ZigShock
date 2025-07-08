@@ -114,6 +114,7 @@ const EIGHTH    : Real_t =  0.125;
 const QUARTER   : Real_t =  0.25;
 const HALF      : Real_t =  0.5;
 const ONE       : Real_t =  1.0;
+const FIVEFOURTH: Real_t =  1.125;
 const TWO       : Real_t =  2.0;
 const THREE     : Real_t =  3.0;
 const FOUR      : Real_t =  4.0;
@@ -1319,7 +1320,7 @@ fn CalcElemVolume2(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
                           s3, dz61, dz50);
    }
 
-   return (fv  / TWELVE);
+   return (fv / TWELVE);
 }
 
 fn CalcElemVolume(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t) Real_t
@@ -2647,13 +2648,13 @@ pub fn main() !void
             domain.z[nidx] = tz;
             nidx += 1;
             // tx += ds; /* may accumulate roundoff... */
-            tx = 1.125*IterToReal(col+1)/IterToReal(edgeElems);
+            tx = FIVEFOURTH*IterToReal(col+1)/IterToReal(edgeElems);
          }
          // ty += ds;  /* may accumulate roundoff... */
-         ty = 1.125*IterToReal(row+1)/IterToReal(edgeElems);
+         ty = FIVEFOURTH*IterToReal(row+1)/IterToReal(edgeElems);
       }
       // tz += ds;  /* may accumulate roundoff... */
-      tz = 1.125*IterToReal(plane+1)/IterToReal(edgeElems);
+      tz = FIVEFOURTH*IterToReal(plane+1)/IterToReal(edgeElems);
    }
 
 
