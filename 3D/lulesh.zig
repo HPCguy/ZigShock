@@ -98,11 +98,6 @@ fn IterToIndex(idx: Iter_t) Index_t
    return @intCast(idx);
 }
 
-fn IndexToIter(idx: Index_t) Iter_t
-{
-   return @intCast(idx);
-}
-
 // Some compilers need a suffix to differentiate FP data size.
 // The following constants help centralize that change.
 // A block of scalar initializations are also found in main(),
@@ -1756,13 +1751,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]const Int_t,
          0                    => delv_xi[lxim[idx]],
          BCbits(BC.XI_M_SYMM) => delv_xi[idx],
          BCbits(BC.XI_M_FREE) => ZERO,
-         else                 => undefined
+         else                 => unreachable
       };
       var delvp : Real_t = switch (bcMask & BCbits(BC.XI_P)) {
          0                    => delv_xi[lxip[idx]],
          BCbits(BC.XI_P_SYMM) => delv_xi[idx],
          BCbits(BC.XI_P_FREE) => ZERO,
-         else                 => undefined
+         else                 => unreachable
       };
 
       delvm = delvm * norm;
@@ -1786,13 +1781,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]const Int_t,
          0                      => delv_eta[letam[idx]],
          BCbits(BC.ETA_M_SYMM)  => delv_eta[idx],
          BCbits(BC.ETA_M_FREE)  => ZERO,
-         else                   => undefined
+         else                   => unreachable
       };
       delvp = switch (bcMask & BCbits(BC.ETA_P)) {
          0                      => delv_eta[letap[idx]],
          BCbits(BC.ETA_P_SYMM)  => delv_eta[idx],
          BCbits(BC.ETA_P_FREE)  => ZERO,
-         else                   => undefined
+         else                   => unreachable
       };
 
       delvm = delvm * norm;
@@ -1815,13 +1810,13 @@ fn CalcMonotonicQRegionForElems(elemBC: [*]const Int_t,
          0                      => delv_zeta[lzetam[idx]],
          BCbits(BC.ZETA_M_SYMM) => delv_zeta[idx],
          BCbits(BC.ZETA_M_FREE) => ZERO,
-         else                   => undefined
+         else                   => unreachable
       };
       delvp = switch (bcMask & BCbits(BC.ZETA_P)) {
          0                      => delv_zeta[lzetap[idx]],
          BCbits(BC.ZETA_P_SYMM) => delv_zeta[idx],
          BCbits(BC.ZETA_P_FREE) => ZERO,
-         else                   => undefined
+         else                   => unreachable
       };
 
       delvm = delvm * norm;
