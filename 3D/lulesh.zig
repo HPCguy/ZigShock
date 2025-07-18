@@ -69,7 +69,7 @@
 // By carefully analyzing what *does* get optimized, it helps determine the
 // quality of the compiler as it relates to scientific software optimization.
 
-comptime { @setFloatMode(.optimized); }
+const IEEEmode: std.builtin.FloatMode = .optimized;
 
 const std = @import("std");
 const stdout = std.io.getStdOut().writer();
@@ -83,12 +83,24 @@ const LULESH_SHOW_PROGRESS : bool = true;
 // the compiler to better utilize caches, memory movement,
 // and/or vectorization.
 
-const Real_t = f32;
-const Index_t = usize;
+const Real_t = f32;   // FP type
+const Iter_t = usize; // iteration type used to form array subscripting type
+const Index_t = u16;  // element type of indices in index arrays
+const Int_t = u16;
 
-fn IndexToReal(idx: Index_t) Real_t
+fn IterToReal(idx: Iter_t) Real_t
 {
    return @floatFromInt(idx);
+}
+
+fn IterToIndex(idx: Iter_t) Index_t
+{
+   return @intCast(idx);
+}
+
+fn IndexToIter(idx: Index_t) Iter_t
+{
+   return @intCast(idx);
 }
 
 // Some compilers need a suffix to differentiate FP data size.
@@ -102,6 +114,7 @@ const EIGHTH    : Real_t =  0.125;
 const QUARTER   : Real_t =  0.25;
 const HALF      : Real_t =  0.5;
 const ONE       : Real_t =  1.0;
+const FIVEFOURTH: Real_t =  1.125;
 const TWO       : Real_t =  2.0;
 const THREE     : Real_t =  3.0;
 const FOUR      : Real_t =  4.0;
@@ -114,7 +127,7 @@ const SIXTYFOUR : Real_t = 64.0;
 const Err = enum(u8) { VolumeError = 1, QStopError = 2 } ;
 
 // 2 Boundary Conditions on each of 6 hexahedral faces (12 bits)
-const BC = enum(u32) {
+const BC = enum(Int_t) {
      XI_M_SYMM = 0x001,   XI_M_FREE = 0x002 ,  XI_M = 0x003,
      XI_P_SYMM = 0x004,   XI_P_FREE = 0x008 ,  XI_P = 0x00c,
     ETA_M_SYMM = 0x010,  ETA_M_FREE = 0x020,  ETA_M = 0x030,
@@ -122,7 +135,7 @@ const BC = enum(u32) {
    ZETA_M_SYMM = 0x100, ZETA_M_FREE = 0x200, ZETA_M = 0x300,
    ZETA_P_SYMM = 0x400, ZETA_P_FREE = 0x800, ZETA_P = 0xc00 } ;
 
-fn BCbits( bits: BC) u32
+fn BCbits( bits: BC) Int_t
 {
    return @intFromEnum(bits);
 }
@@ -147,7 +160,7 @@ const Domain = struct {
    lzetam    : [*]Index_t,
    lzetap    : [*]Index_t,
 
-   elemBC    : [*]u32,         // elem face symm/free-surface flag
+   elemBC    : [*]Int_t,         // elem face symm/free-surface flag
 
    e         : [*]Real_t,      // energy
 
@@ -269,12 +282,12 @@ const Domain = struct {
 
    cycle     : i32,            // iteration count for simulation
 
-   sizeX     : Index_t,
-   sizeY     : Index_t,
-   sizeZ     : Index_t,
-   numElem   : Index_t,
+   sizeX     : Iter_t,
+   sizeY     : Iter_t,
+   sizeZ     : Iter_t,
+   numElem   : Iter_t,
 
-   numNode   : Index_t
+   numNode   : Iter_t
 } ;
 
 fn TimeIncrement(domain: *Domain) void
@@ -328,9 +341,9 @@ fn TimeIncrement(domain: *Domain) void
 
 fn InitStressTermsForElems(p: [*]const Real_t, q: [*]const Real_t,
                            sigxx: [*]Real_t, sigyy: [*]Real_t,
-                           sigzz: [*]Real_t, numElem: Index_t) void
+                           sigzz: [*]Real_t, numElem: Iter_t) void
 {
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while ( idx < numElem) : ( idx += 1 ) {
       const stress = - p[idx] - q[idx];
       sigxx[idx] = stress;
@@ -339,9 +352,10 @@ fn InitStressTermsForElems(p: [*]const Real_t, q: [*]const Real_t,
    }
 }
 
-fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8] Real_t,
+fn CalcElemShapeFunctionDerivatives(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
                                     B: [][8]Real_t) Real_t
 {
+   @setFloatMode(IEEEmode);
    const x0 = x[0];    const x1 = x[1];
    const x2 = x[2];    const x3 = x[3];
    const x4 = x[4];    const x5 = x[5];
@@ -423,6 +437,7 @@ fn SumElemFaceNormal(normalX0: *Real_t, normalY0: *Real_t, normalZ0: *Real_t,
                      x2: Real_t, y2: Real_t, z2: Real_t,
                      x3: Real_t, y3: Real_t, z3: Real_t) void
 {
+   @setFloatMode(IEEEmode);
    const bisectX0 = x3 + x2 - x1 - x0;
    const bisectY0 = y3 + y2 - y1 - y0;
    const bisectZ0 = z3 + z2 - z1 - z0;
@@ -455,11 +470,11 @@ fn CalcElemNodeNormals(pfx: []Real_t, pfy: []Real_t, pfz: []Real_t,
    // pfx = .{ ZERO } ** 8;
    // pfy = .{ ZERO } ** 8;
    // pfz = .{ ZERO } ** 8;
-   var i: Index_t = 0;
-   while ( i < 8 ) : ( i += 1 ) {
-      pfx[i] = ZERO;
-      pfy[i] = ZERO;
-      pfz[i] = ZERO;
+   var idx: Iter_t = 0;
+   while ( idx < 8 ) : ( idx += 1 ) {
+      pfx[idx] = ZERO;
+      pfy[idx] = ZERO;
+      pfz[idx] = ZERO;
    }
    // evaluate face one: nodes 0, 1, 2, 3
    SumElemFaceNormal(&pfx[0], &pfy[0], &pfz[0],
@@ -510,14 +525,12 @@ fn SumElemStressesToNodeForces(B: [3][8]Real_t, stress_xx: Real_t,
                                fx: []Real_t, fy: []Real_t, fz: []Real_t)
                                void
 {
-  // fx.data = - ( stress_xx * B[0].data );
-  // fy.data = - ( stress_yy * B[1].data );
-  // fz.data = - ( stress_zz * B[2].data );
-  var i: Index_t = 0;
-  while ( i < 8 ) : ( i += 1 ) {
-     fx[i] = - ( stress_xx * B[0][i] );
-     fy[i] = - ( stress_yy * B[1][i] );
-     fz[i] = - ( stress_zz * B[2][i] );
+  @setFloatMode(IEEEmode);
+  var idx: Iter_t = 0;
+  while ( idx < 8 ) : ( idx += 1 ) {
+     fx[idx] = - ( stress_xx * B[0][idx] );
+     fy[idx] = - ( stress_yy * B[1][idx] );
+     fz[idx] = - ( stress_zz * B[2][idx] );
   }
 }
 
@@ -525,7 +538,7 @@ fn GatherNodes(elemNodes: [8]Index_t,
                x: [*]const Real_t, y: [*]const Real_t, z: [*]const Real_t,
                x_local: []Real_t, y_local: []Real_t, z_local: []Real_t) void
 {
-  var lnode: Index_t = 0;
+  var lnode: Iter_t = 0;
   while ( lnode < 8 ) : ( lnode += 1 ) {
     const gnode = elemNodes[lnode];
     x_local[lnode] = x[gnode];
@@ -537,7 +550,8 @@ fn GatherNodes(elemNodes: [8]Index_t,
 fn SumForce(elemNodes: [8]Index_t, fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
             fx_local: [8]Real_t, fy_local: [8]Real_t, fz_local: [8]Real_t) void
 {
-  var lnode: Index_t = 0;
+  @setFloatMode(IEEEmode);
+  var lnode: Iter_t = 0;
   while ( lnode < 8 ) : ( lnode += 1 ) {
     const gnode = elemNodes[lnode];
     fx[gnode] += fx_local[lnode];
@@ -546,17 +560,17 @@ fn SumForce(elemNodes: [8]Index_t, fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
   }
 }
 
-fn IntegrateStressForElems(nodelist: [*][8]Index_t,
+fn IntegrateStressForElems(nodelist: [*]const [8]Index_t,
                            x: [*]const Real_t,  y: [*]const Real_t,
                            z: [*]const Real_t, sigxx: [*]const Real_t,
                            sigyy: [*]const Real_t, sigzz: [*]const Real_t,
                            fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
-                           determ: [*]Real_t, numElem: Index_t) void
+                           determ: [*]Real_t, numElem: Iter_t) void
 {
   // loop over all elements
-  var k: Index_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
-    const elemNodes = nodelist[k];
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
+    const elemNodes = nodelist[idx];
 
     var B: [3][8]Real_t = undefined; // shape function derivatives
 
@@ -569,7 +583,7 @@ fn IntegrateStressForElems(nodelist: [*][8]Index_t,
       GatherNodes(elemNodes, x, y, z, &x_local, &y_local, &z_local);
 
       // Volume calculation involves extra work for numerical consistency.
-      determ[k] =
+      determ[idx] =
          CalcElemShapeFunctionDerivatives(x_local, y_local, z_local, &B);
 
       CalcElemNodeNormals( &B[0] , &B[1], &B[2],
@@ -581,7 +595,7 @@ fn IntegrateStressForElems(nodelist: [*][8]Index_t,
       var fy_local: [8]Real_t = undefined;
       var fz_local: [8]Real_t = undefined;
 
-      SumElemStressesToNodeForces( B, sigxx[k], sigyy[k], sigzz[k],
+      SumElemStressesToNodeForces( B, sigxx[idx], sigyy[idx], sigzz[idx],
                                    &fx_local, &fy_local, &fz_local );
 
       // sum nodal force contributions to global force arrray.
@@ -641,6 +655,7 @@ fn VoluDer(x0: Real_t, x1: Real_t, x2: Real_t,
              z3: Real_t, z4: Real_t, z5: Real_t,
              dvdx: *Real_t, dvdy: *Real_t, dvdz: *Real_t) void
 {
+   @setFloatMode(IEEEmode);
    const twelfth = ONE / TWELVE;
 
    dvdx.* =
@@ -701,6 +716,7 @@ fn CalcElemFBHourglassForce(xd: [8]Real_t, yd: [8]Real_t, zd: [8]Real_t,
                             hgfx: []Real_t, hgfy: []Real_t, hgfz: []Real_t)
                             void
 {
+   @setFloatMode(IEEEmode);
    const k00 = 0;
    const k01 = 1;
    const k02 = 2;
@@ -887,10 +903,11 @@ fn FBKernel(x8ni: [8]Real_t, y8ni: [8]Real_t, z8ni: [8]Real_t,
               dvdxi: [8]Real_t, dvdyi: [8]Real_t, dvdzi: [8]Real_t,
               hourgam: [][8]Real_t, volinv: Real_t) void
 {
-   var k1: Index_t = 0;
-   while( k1 < 4 ) : ( k1 += 1) {
-      const gami = gammaa[k1];
-      var hg = &hourgam[k1];
+   @setFloatMode(IEEEmode);
+   var idx: Iter_t = 0;
+   while( idx < 4 ) : ( idx += 1) {
+      const gami = gammaa[idx];
+      var hg = &hourgam[idx];
 
       const hourmodx =
          x8ni[0] * gami[0] + x8ni[1] * gami[1] +
@@ -944,7 +961,7 @@ fn FBKernel(x8ni: [8]Real_t, y8ni: [8]Real_t, z8ni: [8]Real_t,
    }
 }
 
-fn CalcFBHourglassForceForElems(nodelist: [*][8]Index_t,
+fn CalcFBHourglassForceForElems(nodelist: [*]const [8]Index_t,
                                   ss: [*]Real_t, elemMass: [*]Real_t,
                                   xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
                                   fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
@@ -952,27 +969,27 @@ fn CalcFBHourglassForceForElems(nodelist: [*][8]Index_t,
                                   x8n: [*][8]Real_t, y8n: [*][8]Real_t,
                                   z8n: [*][8]Real_t, dvdx: [*][8]Real_t,
                                   dvdy: [*][8]Real_t, dvdz: [*][8]Real_t,
-                                  hourg: Real_t, numElem: Index_t) void
+                                  hourg: Real_t, numElem: Iter_t) void
 {
    // Calculates the Flanagan-Belytschko anti-hourglass force.
 
-   var k2: Index_t = 0;
-   while ( k2 < numElem ) : ( k2 += 1 ) {
-      const elemToNode = nodelist[k2];
+   var idx: Iter_t = 0;
+   while ( idx < numElem ) : ( idx += 1 ) {
+      const elemToNode = nodelist[idx];
 
       // compute the hourglass modes */
 
       var hourgam: [4][8]Real_t = undefined;
 
-      FBKernel( x8n[k2],  y8n[k2],  z8n[k2],
-               dvdx[k2], dvdy[k2], dvdz[k2],
-               &hourgam, ONE/determ[k2]);
+      FBKernel( x8n[idx],  y8n[idx],  z8n[idx],
+               dvdx[idx], dvdy[idx], dvdz[idx],
+               &hourgam, ONE/determ[idx]);
 
       // compute forces
 
-      const   ss1 = ss[k2];
-      const mass1 = elemMass[k2];
-      const volume13 = math.cbrt(determ[k2]);
+      const   ss1 = ss[idx];
+      const mass1 = elemMass[idx];
+      const volume13 = math.cbrt(determ[idx]);
 
       var  xd1: [8]Real_t = undefined;
       var  yd1: [8]Real_t = undefined;
@@ -995,11 +1012,11 @@ fn CalcFBHourglassForceForElems(nodelist: [*][8]Index_t,
 fn CopyBlock(dst1: []Real_t, dst2: []Real_t, dst3: []Real_t,
              src1: [8]Real_t, src2: [8]Real_t, src3: [8]Real_t) void
 {
-  var i: Index_t = 0;
-  while ( i < 8 ) : ( i += 1 ) {
-    dst1[i] = src1[i];
-    dst2[i] = src2[i];
-    dst3[i] = src3[i];
+  var idx: Iter_t = 0;
+  while ( idx < 8 ) : ( idx += 1 ) {
+    dst1[idx] = src1[idx];
+    dst2[idx] = src2[idx];
+    dst3[idx] = src3[idx];
   }
 }
 
@@ -1015,7 +1032,7 @@ fn CalcHourglassControlForElems(domain: *Domain,
    const y8n  = domain.y8n;
    const z8n  = domain.z8n;
 
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
       var  x1: [8]Real_t = undefined;
       var  y1: [8]Real_t = undefined;
@@ -1054,11 +1071,11 @@ fn CalcHourglassControlForElems(domain: *Domain,
    return ;
 }
 
-fn VolErr1(determ: [*]const Real_t, numElem: Index_t) bool
+fn VolErr1(determ: [*]const Real_t, numElem: Iter_t) bool
 {
-  var k: Index_t = 0;
-  while (k < numElem) : ( k += 1 ) {
-    if ( determ[k] <= ZERO ) return true;
+  var idx: Iter_t = 0;
+  while (idx < numElem) : ( idx += 1 ) {
+    if ( determ[idx] <= ZERO ) return true;
   }
   return false;
 }
@@ -1100,49 +1117,51 @@ fn CalcForceForNodes(domain: *Domain) void
   var fy = domain.fy;
   var fz = domain.fz;
 
-  var i: Index_t = 0;
-  while (i < numNode) : ( i += 1 ) {
-     fx[i] = ZERO;
-     fy[i] = ZERO;
-     fz[i] = ZERO;
+  var idx: Iter_t = 0;
+  while (idx < numNode) : ( idx += 1 ) {
+     fx[idx] = ZERO;
+     fy[idx] = ZERO;
+     fz[idx] = ZERO;
   }
 }
 
 fn CalcAccelerationForNodes(xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
-                            fx: [*]Real_t, fy: [*]Real_t, fz: [*]Real_t,
-                            nodalMass: [*]Real_t, numNode: Index_t) void
+                            fx: [*]const Real_t, fy: [*]const Real_t,
+                            fz: [*]const Real_t, nodalMass: [*]const Real_t,
+                            numNode: Iter_t) void
 {
-   var k: Index_t = 0;
-   while ( k < numNode ) : ( k += 1 ) {
-      xdd[k] = fx[k] / nodalMass[k];
-      ydd[k] = fy[k] / nodalMass[k];
-      zdd[k] = fz[k] / nodalMass[k];
+   var idx: Iter_t = 0;
+   while ( idx < numNode ) : ( idx += 1 ) {
+      xdd[idx] = fx[idx] / nodalMass[idx];
+      ydd[idx] = fy[idx] / nodalMass[idx];
+      zdd[idx] = fz[idx] / nodalMass[idx];
    }
 }
 
 fn ApplyAccelerationBoundaryConditionsForNodes(xdd: [*]Real_t, ydd: [*]Real_t,
                                                zdd: [*]Real_t,
-                                               symmX: [*]Index_t,
-                                               symmY: [*]Index_t,
-                                               symmZ: [*]Index_t,
-                                               size: Index_t) void
+                                               symmX: [*]const Index_t,
+                                               symmY: [*]const Index_t,
+                                               symmZ: [*]const Index_t,
+                                               size: Iter_t) void
 {
   const numNodeBC = (size+1)*(size+1);
 
-  var k: Index_t = 0;
-  while ( k < numNodeBC ) : ( k += 1 ) {
-     xdd[symmX[k]] = ZERO;
-     ydd[symmY[k]] = ZERO;
-     zdd[symmZ[k]] = ZERO;
+  var idx: Iter_t = 0;
+  while ( idx < numNodeBC ) : ( idx += 1 ) {
+     xdd[symmX[idx]] = ZERO;
+     ydd[symmY[idx]] = ZERO;
+     zdd[symmZ[idx]] = ZERO;
   }
 }
 
-fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
-                        xdd: [*]Real_t, ydd: [*]Real_t, zdd: [*]Real_t,
-                        dt: Real_t, u_cut: Real_t, numNode: Index_t)
-                        void
+fn CalcVelocityForNodes(xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
+                        xdd: [*]const Real_t, ydd: [*]const Real_t,
+                        zdd: [*]const Real_t, dt: Real_t, u_cut: Real_t,
+                        numNode: Iter_t) void
 {
-  var idx: Index_t = 0;
+  @setFloatMode(IEEEmode);
+  var idx: Iter_t = 0;
   while ( idx < numNode ) : ( idx += 1 ) {
 
      const xt = xd[idx] + xdd[idx] * dt;
@@ -1157,14 +1176,16 @@ fn CalcVelocityForNodes(xd: [*]Real_t,  yd: [*]Real_t,  zd: [*]Real_t,
 }
 
 fn CalcPositionForNodes(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                        xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
-                        dt: Real_t, numNode: Index_t) void
+                        xd: [*]const Real_t, yd: [*]const Real_t,
+                        zd: [*]const Real_t, dt: Real_t,
+                        numNode: Iter_t) void
 {
-   var k: Index_t = 0;
-   while ( k < numNode ) : ( k += 1 ) {
-     x[k] += xd[k] * dt;
-     y[k] += yd[k] * dt;
-     z[k] += zd[k] * dt;
+   @setFloatMode(IEEEmode);
+   var idx: Iter_t = 0;
+   while ( idx < numNode ) : ( idx += 1 ) {
+     x[idx] += xd[idx] * dt;
+     y[idx] += yd[idx] * dt;
+     z[idx] += zd[idx] * dt;
    }
 }
 
@@ -1207,6 +1228,7 @@ fn TRIPLE_PRODUCT(x1_: Real_t, y1_: Real_t, z1_: Real_t,
                   x2_: Real_t, y2_: Real_t, z2_: Real_t,
                   x3_: Real_t, y3_: Real_t, z3_: Real_t) Real_t
 {
+   @setFloatMode(IEEEmode);
    return  (x1_*(y2_*z3_ - z2_*y3_) +
             x2_*(z1_*y3_ - y1_*z3_) +
             x3_*(y1_*z2_ - z1_*y2_));
@@ -1220,6 +1242,7 @@ fn CalcElemVolume2(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
                    z0: Real_t, z1: Real_t, z2: Real_t, z3: Real_t,
                    z4: Real_t, z5: Real_t, z6: Real_t, z7: Real_t) Real_t
 {
+  @setFloatMode(IEEEmode);
   var fv: Real_t = ZERO;
   {
      const dx31 = x3 - x1;
@@ -1297,7 +1320,7 @@ fn CalcElemVolume2(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
                           s3, dz61, dz50);
    }
 
-   return (fv  / TWELVE);
+   return (fv / TWELVE);
 }
 
 fn CalcElemVolume(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t) Real_t
@@ -1312,6 +1335,7 @@ fn AreaFace(x0: Real_t, x1: Real_t, x2: Real_t, x3: Real_t,
             y0: Real_t, y1: Real_t, y2: Real_t, y3: Real_t,
             z0: Real_t, z1: Real_t, z2: Real_t, z3: Real_t) Real_t
 {
+   @setFloatMode(IEEEmode);
    const dx1 = (x2 - x0);
    const dx2 = (x3 - x1);
    const dy1 = (y2 - y0);
@@ -1369,10 +1393,10 @@ fn CalcElemCharacteristicLength(x: [8]Real_t, y: [8]Real_t, z: [8]Real_t,
 }
 
 fn CalcElemVelocityGradient(xvel: [8]Real_t, yvel: [8]Real_t,
-                            zvel: [8]Real_t,
-                            b: [3][8]Real_t, detJ: Real_t, d: []Real_t)
-                            void
+                            zvel: [8]Real_t, b: [3][8]Real_t,
+                            detJ: Real_t, d: []Real_t) void
 {
+   @setFloatMode(IEEEmode);
    const inv_detJ = ONE / detJ;
    const pfx = b[0];
    const pfy = b[1];
@@ -1440,8 +1464,9 @@ fn UpdatePos(deltaTime: Real_t,
              xd_local: [8]Real_t, yd_local: [8]Real_t, zd_local: [8]Real_t)
              void
 {
+  @setFloatMode(IEEEmode);
   const dt2 = deltaTime * HALF;
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while ( idx < 8 ) : ( idx += 1 ) {
     x_local[idx] -= dt2 * xd_local[idx];
     y_local[idx] -= dt2 * yd_local[idx];
@@ -1449,18 +1474,20 @@ fn UpdatePos(deltaTime: Real_t,
   }
 }
 
-fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
-                          x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                          xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
+fn CalcKinematicsForElems(nodelist: [*]const [8]Index_t,
+                          x: [*]const Real_t, y: [*]const Real_t,
+                          z: [*]const Real_t, xd: [*]const Real_t,
+                          yd: [*]const Real_t, zd: [*]const Real_t,
                           dxx: [*]Real_t, dyy: [*]Real_t, dzz: [*]Real_t,
-                          v: [*]Real_t, volo: [*]Real_t,
+                          v: [*]const Real_t, volo: [*]const Real_t,
                           vnew: [*]Real_t, delv: [*]Real_t, arealg: [*]Real_t,
-                          deltaTime: Real_t, numElem: Index_t) void
+                          deltaTime: Real_t, numElem: Iter_t) void
 {
+  @setFloatMode(IEEEmode);
   // loop over all elements
-  var k: Index_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
-    const elemToNode = nodelist[k];
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
+    const elemToNode = nodelist[idx];
 
     var  x_local: [8]Real_t = undefined;
     var  y_local: [8]Real_t = undefined;
@@ -1478,13 +1505,13 @@ fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
 
     // volume calculations
     const volume = CalcElemVolume(x_local, y_local, z_local);
-    const relativeVolume = volume / volo[k];
-    vnew[k] = relativeVolume;
-    delv[k] = relativeVolume - v[k];
+    const relativeVolume = volume / volo[idx];
+    vnew[idx] = relativeVolume;
+    delv[idx] = relativeVolume - v[idx];
 
     // set characteristic length
-    arealg[k] = CalcElemCharacteristicLength(x_local, y_local, z_local,
-                                             volume);
+    arealg[idx] = CalcElemCharacteristicLength(x_local, y_local, z_local,
+                                               volume);
 
     // get nodal velocities from global array and copy into local arrays.
     GatherNodes(elemToNode, xd, yd, zd, &xd_local, &yd_local, &zd_local);
@@ -1499,34 +1526,35 @@ fn CalcKinematicsForElems(nodelist: [*][8]Index_t,
                                B, detJ, &D );
 
     // put velocity gradient quantities into their global arrays.
-    dxx[k] = D[0];
-    dyy[k] = D[1];
-    dzz[k] = D[2];
+    dxx[idx] = D[0];
+    dyy[idx] = D[1];
+    dzz[idx] = D[2];
   }
 }
 
-fn VolErr2(domain: *Domain, numElem: Index_t) bool
+fn VolErr2(domain: *Domain, numElem: Iter_t) bool
 {
+  @setFloatMode(IEEEmode);
   var vdovv = domain.vdov;
   var dxx = domain.dxx;
   var dyy = domain.dyy;
   var dzz = domain.dzz;
   const vnew = domain.vnew;
 
-  var k: Index_t = 0;
-  while ( k < numElem ) : ( k += 1 ) {
+  var idx: Iter_t = 0;
+  while ( idx < numElem ) : ( idx += 1 ) {
     // calc strain rate and apply as constraint (only done in FB element)
-    const vdov = dxx[k] + dyy[k] + dzz[k];
+    const vdov = dxx[idx] + dyy[idx] + dzz[idx];
     const vdovthird = vdov * (ONE / THREE );
 
     // make the rate of deformation tensor deviatoric
-    vdovv[k] = vdov;
-    dxx[k] -= vdovthird;
-    dyy[k] -= vdovthird;
-    dzz[k] -= vdovthird;
+    vdovv[idx] = vdov;
+    dxx[idx] -= vdovthird;
+    dyy[idx] -= vdovthird;
+    dzz[idx] -= vdovthird;
 
     // See if any volumes are negative, and take appropriate action.
-    if (vnew[k] <= ZERO)
+    if (vnew[idx] <= ZERO)
     {
       return true;
     }
@@ -1554,19 +1582,21 @@ fn CalcLagrangeElements(domain: *Domain) void
    }
 }
 
-fn CalcMonotonicQGradientsForElems(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
-                                   xd: [*]Real_t, yd: [*]Real_t, zd: [*]Real_t,
-                                   volo: [*]Real_t, vnew: [*]Real_t,
+fn CalcMonotonicQGradientsForElems(x: [*]const Real_t, y: [*]const Real_t,
+                                   z: [*]const Real_t, xd: [*]const Real_t,
+                                   yd: [*]const Real_t, zd: [*]const Real_t,
+                                   volo: [*]const Real_t,vnew: [*]const Real_t,
                                    delv_xi: [*]Real_t,
                                    delv_eta: [*]Real_t,
                                    delv_zeta: [*]Real_t,
                                    delx_xi: [*]Real_t,
                                    delx_eta: [*]Real_t,
                                    delx_zeta: [*]Real_t,
-                                   nodelist: [*][8]Index_t,
-                                   numElem: Index_t) void
+                                   nodelist: [*]const [8]Index_t,
+                                   numElem: Iter_t) void
 {
-   var idx: Index_t = 0;
+   @setFloatMode(IEEEmode);
+   var idx: Iter_t = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
       const ptiny: Real_t = 1.0e-36;
 
@@ -1699,22 +1729,23 @@ fn CalcMonotonicQGradientsForElems(x: [*]Real_t, y: [*]Real_t, z: [*]Real_t,
    }
 }
 
-fn CalcMonotonicQRegionForElems(elemBC: [*]u32,
-                                lxim: [*]Index_t, lxip: [*]Index_t,
-                                letam: [*]Index_t, letap: [*]Index_t,
-                                lzetam: [*]Index_t, lzetap: [*]Index_t,
-                                delv_xi: [*]Real_t, delv_eta: [*]Real_t,
-                                delv_zeta: [*]Real_t, delx_xi: [*]Real_t,
-                                delx_eta: [*]Real_t, delx_zeta: [*]Real_t,
-                                vdov: [*]Real_t, volo: [*]Real_t,
-                                vnew: [*]Real_t, elemMass: [*]Real_t,
-                                qq: [*]Real_t, ql: [*]Real_t,
-                                qlc_monoq: Real_t, qqc_monoq: Real_t,
-                                monoq_limiter_mult: Real_t,
-                                monoq_max_slope: Real_t,
-                                ptiny: Real_t, numElem: Index_t) void
+fn CalcMonotonicQRegionForElems(elemBC: [*]const Int_t,
+                          lxim: [*]const Index_t, lxip: [*]const Index_t,
+                          letam: [*]const Index_t, letap: [*]const Index_t,
+                          lzetam: [*]const Index_t, lzetap: [*]const Index_t,
+                          delv_xi: [*]const Real_t, delv_eta: [*]const Real_t,
+                          delv_zeta: [*]const Real_t, delx_xi: [*]const Real_t,
+                          delx_eta: [*]const Real_t,delx_zeta: [*]const Real_t,
+                          vdov: [*]const Real_t, volo: [*]const Real_t,
+                          vnew: [*]const Real_t, elemMass: [*]const Real_t,
+                          qq: [*]Real_t, ql: [*]Real_t,
+                          qlc_monoq: Real_t, qqc_monoq: Real_t,
+                          monoq_limiter_mult: Real_t,
+                          monoq_max_slope: Real_t,
+                          ptiny: Real_t, numElem: Iter_t) void
 {
-   var idx: Index_t = 0;
+   @setFloatMode(IEEEmode);
+   var idx: Iter_t = 0;
    while ( idx < numElem ) : ( idx += 1 ) {
       const bcMask: u32 = elemBC[idx];
 
@@ -1870,10 +1901,10 @@ fn CalcMonotonicQForElems(domain: *Domain) void
    }
 }
 
-fn Qerr(q: [*]Real_t, numElem: Index_t, qstop:Real_t) Index_t
+fn Qerr(q: [*]const Real_t, numElem: Iter_t, qstop:Real_t) Iter_t
 {
-  var idx: Index_t = math.maxInt(Index_t);
-  var k: Index_t = 0;
+  var idx: Iter_t = math.maxInt(Iter_t);
+  var k: Iter_t = 0;
   while ( k < numElem ) : ( k += 1 ) {
     if ( q[k] > qstop ) {
       idx = k;
@@ -1909,21 +1940,22 @@ fn CalcQForElems(domain: *Domain) void
       CalcMonotonicQForElems(domain);
 
       // Don't allow excessive artificial viscosity
-      if (Qerr(domain.q, numElem, domain.qstop) != math.maxInt(Index_t))
+      if (Qerr(domain.q, numElem, domain.qstop) != math.maxInt(Iter_t))
          std.process.exit(@intFromEnum(Err.QStopError));
    }
 }
 
 
 fn CalcPressureForElems(p_new: [*]Real_t, bvc: [*]Real_t,
-                        pbvc: [*]Real_t, e_old: [*]Real_t,
-                        compression: [*]Real_t, vnewc: [*]Real_t,
+                        pbvc: [*]Real_t, e_old: [*]const Real_t,
+                        compression: [*]const Real_t, vnewc: [*]const Real_t,
                         pmin: Real_t, p_cut: Real_t, eosvmax: Real_t,
-                        length:Index_t) void
+                        length:Iter_t) void
 {
+   @setFloatMode(IEEEmode);
    const c1s = TWO / THREE ;
 
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while( idx < length ) : ( idx += 1 ) {
       bvc[idx] = c1s * (compression[idx] + ONE );
       pbvc[idx] = c1s;
@@ -1946,17 +1978,19 @@ fn CalcPressureForElems(p_new: [*]Real_t, bvc: [*]Real_t,
 
 fn CalcEnergyForElems(p_new: [*]Real_t, e_new: [*]Real_t, q_new: [*]Real_t,
                       bvc: [*]Real_t, pbvc: [*]Real_t,
-                      p_old: [*]Real_t, e_old: [*]Real_t, q_old: [*]Real_t,
-                      compression: [*]Real_t, compHalfStep: [*]Real_t,
-                      vnewc: [*]Real_t, work: [*]Real_t, delvc: [*]Real_t,
+                      p_old: [*]const Real_t, e_old: [*]const Real_t,
+                      q_old: [*]const Real_t, compression: [*]const Real_t,
+                      compHalfStep: [*]const Real_t, vnewc: [*]const Real_t,
+                      work: [*]const Real_t, delvc: [*]const Real_t,
                       pmin: Real_t, p_cut: Real_t,  e_cut: Real_t,
-                      q_cut: Real_t, emin: Real_t, qq_old: [*]Real_t,
-                      ql_old: [*]Real_t, rho0: Real_t, eosvmax: Real_t,
-                      pHalfStep: [*]Real_t, length: Index_t) void
+                      q_cut: Real_t, emin: Real_t, qq_old: [*]const Real_t,
+                      ql_old: [*]const Real_t, rho0: Real_t, eosvmax: Real_t,
+                      pHalfStep: [*]Real_t, length: Iter_t) void
 {
+   @setFloatMode(IEEEmode);
    const sixth = ONE / SIX;
 
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while( idx < length ) : ( idx += 1 ) {
       e_new[idx] = e_old[idx] - delvc[idx]*(p_old[idx] + q_old[idx]) * HALF +
                  work[idx] * HALF;
@@ -2067,12 +2101,13 @@ fn CalcEnergyForElems(p_new: [*]Real_t, e_new: [*]Real_t, q_new: [*]Real_t,
    return ;
 }
 
-fn CalcSoundSpeedForElems(length: Index_t, ss: [*]Real_t,
-                          vnewc: [*]Real_t, rho0: Real_t, enewc: [*]Real_t,
-                          pnewc: [*]Real_t, pbvc: [*]Real_t,
-                          bvc: [*]Real_t) void
+fn CalcSoundSpeedForElems(length: Iter_t, ss: [*]Real_t,
+                          vnewc: [*]const Real_t, rho0: Real_t,
+                          enewc: [*]const Real_t, pnewc: [*]const Real_t,
+                          pbvc: [*]const Real_t, bvc: [*]const Real_t) void
 {
-   var idx: Index_t = 0;
+   @setFloatMode(IEEEmode);
+   var idx: Iter_t = 0;
    while( idx < length ) : ( idx += 1 ) {
       var ssTmp: Real_t = (pbvc[idx] * enewc[idx] + vnewc[idx] * vnewc[idx] *
                  bvc[idx] * pnewc[idx]) / rho0;
@@ -2086,18 +2121,20 @@ fn CalcSoundSpeedForElems(length: Index_t, ss: [*]Real_t,
    }
 }
 
-fn EvalCopy(p_old: [*]Real_t, p: [*]Real_t, numElem: Index_t) void
+fn EvalCopy(p_old: [*]Real_t, p: [*]const Real_t, numElem: Iter_t) void
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     p_old[idx] = p[idx];
   }
 }
 
 fn EvalCompression(compression: [*]Real_t, compHalfStep: [*]Real_t,
-                   numElem: Index_t, vnewc: [*]Real_t, delvc: [*]Real_t) void
+                   vnewc: [*]const Real_t, delvc: [*]const Real_t,
+                   numElem: Iter_t) void
 {
-  var idx: Index_t = 0;
+  @setFloatMode(IEEEmode);
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     compression[idx] = ONE / vnewc[idx] - ONE;
     const vchalf = vnewc[idx] - delvc[idx] * HALF;
@@ -2105,11 +2142,11 @@ fn EvalCompression(compression: [*]Real_t, compHalfStep: [*]Real_t,
   }
 }
 
-fn EvalEosVmin(vnewc: [*]Real_t, compHalfStep: [*]Real_t,
-               compression: [*]Real_t,
-               numElem: Index_t, eosvmin: Real_t) void
+fn EvalEosVmin(vnewc: [*]const Real_t, compHalfStep: [*]Real_t,
+               compression: [*]const Real_t,
+               numElem: Iter_t, eosvmin: Real_t) void
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     if (vnewc[idx] <= eosvmin) { // impossible due to calling func?
       compHalfStep[idx] = compression[idx];
@@ -2117,11 +2154,11 @@ fn EvalEosVmin(vnewc: [*]Real_t, compHalfStep: [*]Real_t,
   }
 }
 
-fn EvalEosVmax(vnewc: [*]Real_t, p_old: [*]Real_t,
+fn EvalEosVmax(vnewc: [*]const Real_t, p_old: [*]Real_t,
                compHalfStep: [*]Real_t, compression: [*]Real_t,
-               numElem: Index_t, eosvmax: Real_t) void
+               numElem: Iter_t, eosvmax: Real_t) void
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     if (vnewc[idx] >= eosvmax) { // impossible due to calling func?
       p_old[idx]        = ZERO;
@@ -2131,18 +2168,19 @@ fn EvalEosVmax(vnewc: [*]Real_t, p_old: [*]Real_t,
   }
 }
 
-fn EvalEosResetWork(work: [*]Real_t, numElem: Index_t) void
+fn EvalEosResetWork(work: [*]Real_t, numElem: Iter_t) void
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     work[idx] = ZERO;
   }
 }
 
-fn UpdatePE(p: [*]Real_t, p_new: [*]Real_t, e: [*]Real_t, e_new: [*]Real_t,
-            q: [*]Real_t, q_new: [*]Real_t, numElem: Index_t) void
+fn UpdatePE(p: [*]Real_t, p_new: [*]const Real_t,
+            e: [*]Real_t, e_new: [*]const Real_t,
+            q: [*]Real_t, q_new: [*]const Real_t, numElem: Iter_t) void
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     p[idx] = p_new[idx];
     e[idx] = e_new[idx];
@@ -2150,7 +2188,8 @@ fn UpdatePE(p: [*]Real_t, p_new: [*]Real_t, e: [*]Real_t, e_new: [*]Real_t,
   }
 }
 
-fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
+fn EvalEOSForElems(domain: *Domain, vnewc: [*]const Real_t,
+                   numElem: Iter_t) void
 {
    const  e_cut = domain.e_cut;
    const  p_cut = domain.p_cut;
@@ -2176,7 +2215,7 @@ fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
 
    EvalCopy(p_old, domain.p, numElem);
 
-   EvalCompression(compression, compHalfStep, numElem, vnewc, delvc);
+   EvalCompression(compression, compHalfStep, vnewc, delvc, numElem);
 
    // Check for v > eosvmax or v < eosvmin
    if ( eosvmin != ZERO ) {
@@ -2203,10 +2242,10 @@ fn EvalEOSForElems(domain: *Domain, vnewc: [*]Real_t, numElem: Index_t) void
              vnewc, rho0, e_new, p_new, pbvc, bvc);
 }
 
-fn VolErr3(vnewc: [*]Real_t, vnew: [*]Real_t, v: [*]Real_t, numElem: Index_t,
-           eosvmin: Real_t, eosvmax: Real_t) bool
+fn VolErr3(vnewc: [*]Real_t, vnew: [*]const Real_t, v: [*]const Real_t,
+           numElem: Iter_t, eosvmin: Real_t, eosvmax: Real_t) bool
 {
-  var idx: Index_t = 0;
+  var idx: Iter_t = 0;
   while( idx < numElem ) : ( idx += 1 ) {
     vnewc[idx] = vnew[idx];
   }
@@ -2265,25 +2304,25 @@ fn ApplyMaterialPropertiesForElems(domain: *Domain) void
   }
 }
 
-fn UpdateVolumesForElems(vnew: [*]Real_t, v: [*]Real_t,
-                         v_cut: Real_t, length: Index_t) void
+fn UpdateVolumesForElems(vnew: [*]const Real_t, v: [*]Real_t,
+                         v_cut: Real_t, length: Iter_t) void
 {
    if (length != 0) {
-      var k: Index_t = 0;
-      while ( k < length ) : ( k += 1 ) {
-         var tmpV: Real_t = vnew[k];
+      var idx: Iter_t = 0;
+      while ( idx < length ) : ( idx += 1 ) {
+         var tmpV: Real_t = vnew[idx];
 
          if ( @abs(tmpV - ONE) < v_cut )
             tmpV = ONE;
 
-         v[k] = tmpV;
+         v[idx] = tmpV;
       }
    }
 
    return;
 }
 
-fn LagrangeElements(domain: *Domain, numElem: Index_t) void
+fn LagrangeElements(domain: *Domain, numElem: Iter_t) void
 {
   CalcLagrangeElements(domain);
 
@@ -2296,38 +2335,39 @@ fn LagrangeElements(domain: *Domain, numElem: Index_t) void
                         domain.v_cut, numElem);
 }
 
-fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
-                                 vdov: [*]Real_t, arealg: [*]Real_t,
+fn CalcCourantConstraintForElems(length: Iter_t, ss: [*]const Real_t,
+                                 vdov: [*]const Real_t, arealg: [*]const Real_t,
                                  qqc: Real_t, dtcourant: *Real_t) void
 {
+   @setFloatMode(IEEEmode);
    var dtcourant_tmp: Real_t = 1.0e+20;
    var courant_elem: bool = false;
-   // var courant_elem: Index_t = -1;
+   // var courant_elem: Iter_t = -1;
 
    const qqc2 = SIXTYFOUR * qqc * qqc;
 
-   var indx: Index_t = 0;
-   while ( indx < length) : ( indx += 1 ) {
+   var idx: Iter_t = 0;
+   while ( idx < length) : ( idx += 1 ) {
 
-      var dtf: Real_t = ss[indx] * ss[indx];
+      var dtf: Real_t = ss[idx] * ss[idx];
 
-      if ( vdov[indx] < ZERO ) {
+      if ( vdov[idx] < ZERO ) {
 
          dtf = dtf
-            + qqc2 * arealg[indx] * arealg[indx] * vdov[indx] * vdov[indx];
+            + qqc2 * arealg[idx] * arealg[idx] * vdov[idx] * vdov[idx];
       }
 
       dtf = math.sqrt( dtf );
 
-      dtf = arealg[indx] / dtf;
+      dtf = arealg[idx] / dtf;
 
       // determine minimum timestep with its corresponding elem
 
-      if (vdov[indx] != ZERO) {
+      if (vdov[idx] != ZERO) {
          if ( dtf < dtcourant_tmp ) {
             dtcourant_tmp = dtf;
             courant_elem = true;
-            // courant_elem = indx;
+            // courant_elem = idx;
          }
       }
    }
@@ -2342,22 +2382,22 @@ fn CalcCourantConstraintForElems(length: Index_t, ss: [*]Real_t,
    return;
 }
 
-fn CalcHydroConstraintForElems(length: Index_t, vdov: [*]Real_t,
+fn CalcHydroConstraintForElems(length: Iter_t, vdov: [*]const Real_t,
                                dvovmax: Real_t, dthydro: *Real_t) void
 {
    const psmall: Real_t = 1.0e-20;
    var dthydro_tmp: Real_t = 1.0e+20;
    var hydro_elem: bool = false;
-   // var hydro_elem: Index_t = -1;
+   // var hydro_elem: Iter_t = -1;
 
-   var indx: Index_t = 0;
-   while ( indx < length) : ( indx += 1 ) {
-      if (vdov[indx] != ZERO) {
-         const dtdvov = dvovmax / (@abs(vdov[indx])+psmall);
+   var idx: Iter_t = 0;
+   while ( idx < length) : ( idx += 1 ) {
+      if (vdov[idx] != ZERO) {
+         const dtdvov = dvovmax / (@abs(vdov[idx])+psmall);
          if ( dthydro_tmp > dtdvov ) {
             dthydro_tmp = dtdvov;
             hydro_elem = true;
-            // hydro_elem = indx;
+            // hydro_elem = idx;
          }
       }
    }
@@ -2394,15 +2434,16 @@ fn LagrangeLeapFrog(domain: *Domain) void
 
 pub fn main() !void
 {
+   @setFloatMode(IEEEmode);
    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
    defer arena.deinit();
 
    const allocator = arena.allocator();
 
-   const edgeElems : Index_t = 20;
-   const edgeNodes : Index_t = edgeElems + 1;
-   const domElems  : Index_t = edgeElems*edgeElems*edgeElems;
-   const domNodes  : Index_t = edgeNodes*edgeNodes*edgeNodes;
+   const edgeElems : Iter_t = 20;
+   const edgeNodes : Iter_t = edgeElems + 1;
+   const domElems  : Iter_t = edgeElems*edgeElems*edgeElems;
+   const domNodes  : Iter_t = edgeNodes*edgeNodes*edgeNodes;
 
    // ****************************
    // *   Initialize Sedov Mesh  *
@@ -2438,7 +2479,7 @@ pub fn main() !void
       .lzetap = try allocator.create([domElems]Index_t),
 
    // elem face symm/free-surface flag
-      .elemBC = try allocator.create([domElems]u32),
+      .elemBC = try allocator.create([domElems]Int_t),
 
       .e = try allocator.create([domElems]Real_t), // energy
       .p = try allocator.create([domElems]Real_t), // pressure
@@ -2567,7 +2608,7 @@ pub fn main() !void
 
    // Basic Field Initialization
 
-   var k: Index_t = 0;
+   var k: Iter_t = 0;
    while ( k < domElems ) : ( k += 1 ) {
       domain.e[k]  = ZERO;
       domain.p[k]  = ZERO;
@@ -2592,58 +2633,51 @@ pub fn main() !void
 
    // initialize nodal coordinates
 
-   var nidx: Index_t = 0;
+   var nidx: Iter_t = 0;
    var tz: Real_t = ZERO;
-   var plane: Index_t = 0;
+   var plane: Iter_t = 0;
    while ( plane < edgeNodes ) : ( plane += 1 ) {
       var ty: Real_t = ZERO;
-      var row: Index_t = 0;
+      var row: Iter_t = 0;
       while ( row < edgeNodes ) : ( row += 1 ) {
          var tx: Real_t = ZERO;
-         var col: Index_t = 0;
+         var col: Iter_t = 0;
          while ( col < edgeNodes ) : ( col += 1 ) {
             domain.x[nidx] = tx;
             domain.y[nidx] = ty;
             domain.z[nidx] = tz;
             nidx += 1;
             // tx += ds; /* may accumulate roundoff... */
-            tx = 1.125*IndexToReal(col+1)/IndexToReal(edgeElems);
+            tx = FIVEFOURTH*IterToReal(col+1)/IterToReal(edgeElems);
          }
          // ty += ds;  /* may accumulate roundoff... */
-         ty = 1.125*IndexToReal(row+1)/IndexToReal(edgeElems);
+         ty = FIVEFOURTH*IterToReal(row+1)/IterToReal(edgeElems);
       }
       // tz += ds;  /* may accumulate roundoff... */
-      tz = 1.125*IndexToReal(plane+1)/IndexToReal(edgeElems);
+      tz = FIVEFOURTH*IterToReal(plane+1)/IterToReal(edgeElems);
    }
 
 
    // embed hexehedral elements in nodal point lattice
 
    nidx = 0;
-   var zidx: Index_t = 0;
+   var zidx: Iter_t = 0;
    plane = 0;
    while ( plane < edgeElems ) : ( plane += 1 ) {
-      var row: Index_t = 0;
+      var row: Iter_t = 0;
       while ( row < edgeElems ) : ( row += 1 ) {
-         var col: Index_t = 0;
+         var col: Iter_t = 0;
          while ( col < edgeElems ) : ( col += 1 ) {
-            // var localNode = domain.nodelist[zidx];
-            // localNode[0] = nidx                                       ;
-            // localNode[1] = nidx                                   + 1 ;
-            // localNode[2] = nidx                       + edgeNodes + 1 ;
-            // localNode[3] = nidx                       + edgeNodes     ;
-            // localNode[4] = nidx + edgeNodes*edgeNodes                 ;
-            // localNode[5] = nidx + edgeNodes*edgeNodes             + 1 ;
-            // localNode[6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
-            // localNode[7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
-            domain.nodelist[zidx][0] = nidx                                       ;
-            domain.nodelist[zidx][1] = nidx                                   + 1 ;
-            domain.nodelist[zidx][2] = nidx                       + edgeNodes + 1 ;
-            domain.nodelist[zidx][3] = nidx                       + edgeNodes     ;
-            domain.nodelist[zidx][4] = nidx + edgeNodes*edgeNodes                 ;
-            domain.nodelist[zidx][5] = nidx + edgeNodes*edgeNodes             + 1 ;
-            domain.nodelist[zidx][6] = nidx + edgeNodes*edgeNodes + edgeNodes + 1 ;
-            domain.nodelist[zidx][7] = nidx + edgeNodes*edgeNodes + edgeNodes     ;
+            const edgeNodes2 = edgeNodes*edgeNodes;
+            var localNode = &domain.nodelist[zidx];
+            localNode[0] = IterToIndex(nidx                             );
+            localNode[1] = IterToIndex(nidx                          + 1);
+            localNode[2] = IterToIndex(nidx              + edgeNodes + 1);
+            localNode[3] = IterToIndex(nidx              + edgeNodes    );
+            localNode[4] = IterToIndex(nidx + edgeNodes2                );
+            localNode[5] = IterToIndex(nidx + edgeNodes2             + 1);
+            localNode[6] = IterToIndex(nidx + edgeNodes2 + edgeNodes + 1);
+            localNode[7] = IterToIndex(nidx + edgeNodes2 + edgeNodes    );
             zidx += 1;
             nidx += 1;
          }
@@ -2665,7 +2699,7 @@ pub fn main() !void
    k = 0;
    while ( k < domElems ) : ( k += 1 ) {
       const elemToNode = domain.nodelist[k];
-      var lnode: Index_t = 0;
+      var lnode: Iter_t = 0;
       while ( lnode < 8 ) : ( lnode += 1 ) {
         const gnode = elemToNode[lnode];
         x_local[lnode] = domain.x[gnode];
@@ -2677,7 +2711,7 @@ pub fn main() !void
       const volume = CalcElemVolume(x_local, y_local, z_local);
       domain.volo[k] = volume;
       domain.elemMass[k] = volume;
-      var j: Index_t = 0;
+      var j: Iter_t = 0;
       while ( j < 8 ) : ( j += 1 ) {
          const idx = elemToNode[j];
          domain.nodalMass[idx] += volume / EIGHT;
@@ -2693,11 +2727,11 @@ pub fn main() !void
    while ( k < edgeNodes ) : ( k += 1 ) {
       const planeInc = k*edgeNodes*edgeNodes;
       const rowInc   = k*edgeNodes;
-      var j: Index_t = 0;
+      var j: Iter_t = 0;
       while ( j < edgeNodes ) : ( j += 1 ) {
-         domain.symmX[nidx] = planeInc + j*edgeNodes;
-         domain.symmY[nidx] = planeInc + j;
-         domain.symmZ[nidx] = rowInc   + j;
+         domain.symmX[nidx] = IterToIndex(planeInc + j*edgeNodes);
+         domain.symmY[nidx] = IterToIndex(planeInc + j          );
+         domain.symmZ[nidx] = IterToIndex(rowInc   + j          );
          nidx += 1;
       }
    }
@@ -2706,32 +2740,32 @@ pub fn main() !void
    domain.lxim[0] = 0;
    k = 1;
    while ( k < domElems ) : ( k += 1 ) {
-      domain.lxim[k]   = k-1;
-      domain.lxip[k-1] = k;
+      domain.lxim[k]   = IterToIndex(k-1);
+      domain.lxip[k-1] = IterToIndex(k);
    }
-   domain.lxip[domElems-1] = domElems-1;
+   domain.lxip[domElems-1] = IterToIndex(domElems-1);
 
    k = 0;
    while ( k < edgeElems ) : ( k += 1 ) {
-      domain.letam[k] = k; 
-      domain.letap[domElems-edgeElems+k] = domElems-edgeElems+k;
+      domain.letam[k] = IterToIndex(k);
+      domain.letap[domElems-edgeElems+k] = IterToIndex(domElems-edgeElems+k);
    }
    k = edgeElems;
    while ( k < domElems ) : ( k += 1 ) {
-      domain.letam[k] = k-edgeElems;
-      domain.letap[k-edgeElems] = k;
+      domain.letam[k] = IterToIndex(k-edgeElems);
+      domain.letap[k-edgeElems] = IterToIndex(k);
    }
 
    k = 0;
    while ( k < edgeElems*edgeElems ) : ( k += 1 ) {
-      domain.lzetam[k] = k;
+      domain.lzetam[k] = IterToIndex(k);
       domain.lzetap[domElems-edgeElems*edgeElems+k] =
-         domElems-edgeElems*edgeElems+k;
+         IterToIndex(domElems-edgeElems*edgeElems+k);
    }
    k = edgeElems*edgeElems;
    while ( k < domElems ) : ( k += 1 ) {
-      domain.lzetam[k] = k - edgeElems*edgeElems;
-      domain.lzetap[k-edgeElems*edgeElems] = k;
+      domain.lzetam[k] = IterToIndex(k - edgeElems*edgeElems);
+      domain.lzetap[k-edgeElems*edgeElems] = IterToIndex(k);
    }
 
    // set up boundary condition information
@@ -2746,7 +2780,7 @@ pub fn main() !void
    while ( k < edgeElems ) : ( k += 1 ) {
       const planeInc2 = k*edgeElems*edgeElems;
       const rowInc2   = k*edgeElems;
-      var j: Index_t = 0;
+      var j: Iter_t = 0;
       while ( j < edgeElems ) : ( j += 1 ) {
          domain.elemBC[planeInc2+j*edgeElems] |=
             BCbits(BC.XI_M_SYMM);
