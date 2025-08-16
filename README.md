@@ -4,7 +4,7 @@
 To try the 1D:
 ```
 % zig build-exe -OReleaseFast 1D/shock.zig
-% ./shock > ultra
+% ./shock >& ultra
 % gnuplot
 gnuplot> plot "ultra"
 gnuplot> exit

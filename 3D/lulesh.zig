@@ -69,10 +69,9 @@
 // By carefully analyzing what *does* get optimized, it helps determine the
 // quality of the compiler as it relates to scientific software optimization.
 
-const IEEEmode: std.builtin.FloatMode = .optimized;
-
 const std = @import("std");
-const stdout = std.io.getStdOut().writer();
+const print = std.debug.print;
+const IEEEmode: std.builtin.FloatMode = .optimized;
 const math = std.math;
 
 // Display timestep information throughout calculation
@@ -2797,11 +2796,11 @@ pub fn main() !void
       TimeIncrement(&domain);
       LagrangeLeapFrog(&domain);
       if (LULESH_SHOW_PROGRESS)
-         try stdout.print("time = {e:9.6}, dt={e:9.6}\n",
+         print("time = {e:9.6}, dt={e:9.6}\n",
                            .{ domain.time, domain.deltatime });
    }
    if (!LULESH_SHOW_PROGRESS)
-      try stdout.print("time = {e:9.6}, dt={e:9.6}\n",
+      print("time = {e:9.6}, dt={e:9.6}\n",
                         .{ domain.time, domain.deltatime });
 
    return;

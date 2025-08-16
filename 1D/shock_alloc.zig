@@ -21,13 +21,13 @@
 //************************************************************************/
 
 const std = @import("std");
-const stdout = std.io.getStdOut().writer();
+const print = std.debug.print;
 const math = std.math;
 
 const Real_t = f32;
-const Index_t = usize;
+const Iter_t = usize;
 
-fn IndexToReal(idx: Index_t) Real_t
+fn IterToReal(idx: Iter_t) Real_t
 {
    return @floatFromInt(idx);
 }
@@ -61,7 +61,7 @@ const ONE:          Real_t = 1.0;
 
 //************************************************************************/
 
-fn InitializeShockTubeMesh(numElem: Index_t, mass: [*]Real_t,
+fn InitializeShockTubeMesh(numElem: Iter_t, mass: [*]Real_t,
                            momentum:[*]Real_t, energy:[*]Real_t,
                            pressure:[*]Real_t) void
 {
@@ -71,7 +71,7 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: [*]Real_t,
    var pressureInitial: Real_t = gammaInverse;
    var energyInitial: Real_t   = pressureInitial/(gammaa-ONE);
 
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while ( idx < midTube ) : ( idx += 1 ) {
       mass[idx]     = massInitial;
       pressure[idx] = pressureInitial;
@@ -111,12 +111,12 @@ fn InitializeShockTubeMesh(numElem: Index_t, mass: [*]Real_t,
 //
 //************************************************************************/
 
-fn ComputeFaceInfo(numFace: Index_t,
+fn ComputeFaceInfo(numFace: Iter_t,
                    mass: [*]const Real_t, momentum: [*]const Real_t,
                    energy: [*]const Real_t,
                    f0: [*]Real_t, f1: [*]Real_t, f2: [*]Real_t) void
 {
-   var idx: Index_t = 0;
+   var idx: Iter_t = 0;
    while ( idx < numFace ) : ( idx += 1 ) {
       // each face has an upwind and downwind element
       const upWind   = idx;     // upwind element
@@ -184,12 +184,12 @@ fn ComputeFaceInfo(numFace: Index_t,
 //
 //************************************************************************/
 
-fn UpdateElemInfo(numElem: Index_t,
+fn UpdateElemInfo(numElem: Iter_t,
                   mass: [*]Real_t, momentum: [*]Real_t, energy: [*]Real_t,
                   pressure: [*]Real_t, f0: [*]const Real_t,
                   f1: [*]const Real_t, f2: [*]const Real_t, dtdx: Real_t) void
 {
-   var idx: Index_t = 1;
+   var idx: Iter_t = 1;
    while ( idx < numElem ) : ( idx += 1 ) {
       // each element inside the tube has an upwind and downwind face
       const upWind = idx-1;     // upwind face
@@ -210,14 +210,14 @@ fn UpdateElemInfo(numElem: Index_t,
 // Purpose   :  Create a plot for a single field
 //************************************************************************/
 
-fn DumpField(tag: []const u8, numElem: Index_t, field: [*]const Real_t) !void
+fn DumpField(tag: []const u8, numElem: Iter_t, field: [*]const Real_t) void
 {
-   try stdout.print("{s}\n", .{ tag });
-   var idx: Index_t = 0;
+   print("{s}\n", .{ tag });
+   var idx: Iter_t = 0;
    while( idx < numElem ) : ( idx += 1 ) {
-      try stdout.print("{d}.0 {e:9.6}\n", .{ idx, field[idx] });
+      print("{d}.0 {e:9.6}\n", .{ idx, field[idx] });
    }
-   try stdout.print("\n\n", .{});
+   print("\n\n", .{});
 }
 
 
@@ -226,18 +226,18 @@ fn DumpField(tag: []const u8, numElem: Index_t, field: [*]const Real_t) !void
 // Purpose   :  create output that can be viewed with gnuplot: plot "file"
 //************************************************************************/
 
-fn DumpPlot(numElem: Index_t, mass: [*]const Real_t, momentum: [*]const Real_t,
+fn DumpPlot(numElem: Iter_t, mass: [*]const Real_t, momentum: [*]const Real_t,
                               energy: [*]const Real_t,
-                              pressure: [*]const Real_t) !void
+                              pressure: [*]const Real_t) void
 {
    const m = "# mass";
-   try DumpField(m, numElem, mass);
+   DumpField(m, numElem, mass);
    const mom = "# momentum";
-   try DumpField(mom, numElem, momentum);
+   DumpField(mom, numElem, momentum);
    const e = "# energy";
-   try DumpField(e, numElem, energy);
+   DumpField(e, numElem, energy);
    const p = "# pressure";
-   try DumpField(p, numElem, pressure);
+   DumpField(p, numElem, pressure);
 }
 
 
@@ -270,14 +270,14 @@ pub fn main() !void
    InitializeShockTubeMesh(numElems+1, mass, momentum, energy, pressure);
 
    var time: Real_t = ZERO;
-   const dx: Real_t = ONE / IndexToReal( numElems );
+   const dx: Real_t = ONE / IterToReal( numElems );
    const safetyFactor: Real_t = 0.4;
    const dt: Real_t = safetyFactor * dx;
 
    var currCycle: u32 = 0;
    while ( currCycle < numTotalCycles ) : ( currCycle += 1 ) {
       // if (currCycle % dumpInterval == 0)
-      //    try DumpPlot(numElems, mass, momentum, energy, pressure);
+      //    DumpPlot(numElems, mass, momentum, energy, pressure);
 
       ComputeFaceInfo(numFaces, mass, momentum, energy, f0, f1, f2);
       UpdateElemInfo (numElems-1, mass, momentum, energy, pressure,
@@ -285,7 +285,7 @@ pub fn main() !void
       time = time + dt;
    }
 
-   try DumpPlot(numElems, mass, momentum, energy, pressure);
+   DumpPlot(numElems, mass, momentum, energy, pressure);
 
    return ;
 }
