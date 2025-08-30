@@ -65,7 +65,7 @@ fn InitializeShockTubeMesh(numElem: Iter_t, mass: []Real_t,
                            momentum:[]Real_t, energy:[]Real_t,
                            pressure:[]Real_t) void
 {
-   const midTube = numElem / 2;
+   const midTube: Iter_t = numElem / 2;
 
    var massInitial: Real_t     = ONE;
    var pressureInitial: Real_t = gammaInverse;
@@ -119,8 +119,8 @@ fn ComputeFaceInfo(numFace: Iter_t,
    var idx: Iter_t = 0;
    while ( idx < numFace ) : ( idx += 1 ) {
       // each face has an upwind and downwind element
-      const upWind   = idx;     // upwind element
-      const downWind = idx + 1; // downwind element
+      const upWind:   Iter_t = idx;     // upwind element
+      const downWind: Iter_t = idx + 1; // downwind element
 
       // calculate face centered quantities
       var massf: Real_t =     HALF * (mass[upWind]     + mass[downWind]);
@@ -129,7 +129,7 @@ fn ComputeFaceInfo(numFace: Iter_t,
       var pressuref: Real_t = (gammaa - ONE) *
                       (energyf - HALF*momentumf*momentumf/massf);
       const c: Real_t = math.sqrt(gammaa*pressuref/massf);
-      const v = momentumf/massf;
+      const v: Real_t = momentumf/massf;
 
       // Now that we have the wave speeds, we might want to
       // look for the max wave speed here, and update dt
@@ -138,35 +138,35 @@ fn ComputeFaceInfo(numFace: Iter_t,
 
       // OK, calculate face quantities
 
-      const contributor = if (v >= ZERO) upWind else downWind;
+      const contributor: Iter_t = if (v >= ZERO) upWind else downWind;
       massf = mass[contributor];
       momentumf = momentum[contributor];
       energyf = energy[contributor];
       pressuref = energyf - HALF*momentumf*momentumf/massf;
-      const ev = v*(gammaa - ONE);
+      const ev: Real_t = v*(gammaa - ONE);
 
       f0[idx] = ev*massf;
       f1[idx] = ev*momentumf;
       f2[idx] = ev*(energyf - pressuref);
 
-      const contributorp = if (v + c >= ZERO) upWind else downWind;
+      const contributorp: Iter_t = if (v + c >= ZERO) upWind else downWind;
       massf = mass[contributorp];
       momentumf = momentum[contributorp];
       energyf = energy[contributorp];
       pressuref = (gammaa - ONE)*(energyf - HALF*momentumf*momentumf/massf);
-      const evp = HALF*(v + c);
+      const evp: Real_t = HALF*(v + c);
       const cLocalp: Real_t = math.sqrt(gammaa*pressuref/massf);
 
       f0[idx] += evp*massf;
       f1[idx] += evp*(momentumf + massf*cLocalp);
       f2[idx] += evp*(energyf + pressuref + momentumf*cLocalp);
 
-      const contributorm = if (v - c >= ZERO) upWind else downWind;
+      const contributorm: Iter_t = if (v - c >= ZERO) upWind else downWind;
       massf = mass[contributorm];
       momentumf = momentum[contributorm];
       energyf = energy[contributorm];
       pressuref = (gammaa - ONE)*(energyf - HALF*momentumf*momentumf/massf);
-      const evm = HALF*(v - c);
+      const evm: Real_t = HALF*(v - c);
       const cLocalm: Real_t = math.sqrt(gammaa*pressuref/massf);
 
       f0[idx] += evm*massf;
@@ -192,8 +192,8 @@ fn UpdateElemInfo(numElem: Iter_t,
    var idx: Iter_t = 1;
    while ( idx < numElem ) : ( idx += 1 ) {
       // each element inside the tube has an upwind and downwind face
-      const upWind = idx-1;     // upwind face
-      const downWind = idx;   // downwind face
+      const upWind:   Iter_t = idx-1; // upwind face
+      const downWind: Iter_t = idx;   // downwind face
 
       mass[idx]     -= gammaInverse*(f0[downWind] - f0[upWind])*dtdx;
       momentum[idx] -= gammaInverse*(f1[downWind] - f1[upWind])*dtdx;
@@ -248,9 +248,9 @@ fn DumpPlot(numElem: Iter_t, mass: []const Real_t, momentum: []const Real_t,
 
 pub fn main() !void
 {
-   const numElems = 8192;          // 2048
-   const numFaces = numElems - 1;
-   const numTotalCycles = 6144;    // 1024
+   const numElems: Iter_t = 8192;          // 2048
+   const numFaces: Iter_t = numElems - 1;
+   const numTotalCycles = 6144;            // 1024
    // const dumpInterval = 500;
 
    var mass: [numElems+1]Real_t     = undefined;
